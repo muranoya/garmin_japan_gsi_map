@@ -6,7 +6,7 @@
 # エリア名（出力ファイル名に使う）
 area := "okutama"
 # 範囲 minlon,minlat,maxlon,maxlat
-bbox := "138.95,35.70,139.25,35.90"
+bbox := "138.92,35.45,140.15,35.92"
 # 取得データと生成物の置き場所
 data_dir := "data"
 
