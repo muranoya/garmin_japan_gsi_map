@@ -67,6 +67,9 @@
     1 段階目は一致する端点（3 つ以上集まる点は分岐とみなして結合しない）、2 段階目は許容距離内の相互最近傍
   - 面: タイル範囲で切り取るだけ（結合はしない）
   - 点: タイル範囲内（半開区間）のものだけを採用し、バッファによる重複を除く
+- 分割（`src/split.rs`）: Garmin は 1 タイルの RGN が 16MB までなので、ノード数が `--max-nodes`（既定 200 万）以下に
+  なるまで四分木で範囲を分け、区画ごとに `<bounds>` 付きの OSM を書き出す。mkgmap は区画を並列に処理する。
+  目安: 奥多摩〜東京（約 2.4 万タイル）で 160 区画、最大の区画でも RGN は上限の約 20%
 - 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
 - CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、エリアは `just area=<名前> bbox=<範囲> ...` で指定）:
   - `gsi2garmin fetch --bbox <minlon,minlat,maxlon,maxlat> -o area.mbtiles`
