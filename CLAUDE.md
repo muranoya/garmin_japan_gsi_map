@@ -68,7 +68,7 @@
   - 面: タイル範囲で切り取るだけ（結合はしない）
   - 点: タイル範囲内（半開区間）のものだけを採用し、バッファによる重複を除く
 - 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
-- CLI:
+- CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、エリアは `just area=<名前> bbox=<範囲> ...` で指定）:
   - `gsi2garmin fetch --bbox <minlon,minlat,maxlon,maxlat> -o area.mbtiles`
   - `gsi2garmin fetch --source dem --bbox ... -o area-dem.mbtiles`（標高タイル。陰影起伏用）
   - `gsi2garmin build <tiles_dir|area.mbtiles> -o area.img [--dem area-dem.mbtiles] [--work-dir <dir>] [--style <dir>] [--typ <file>] [--code-page 932]`
