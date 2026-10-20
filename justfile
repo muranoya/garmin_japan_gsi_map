@@ -7,6 +7,9 @@
 area := "okutama"
 # 範囲 minlon,minlat,maxlon,maxlat
 bbox := "138.92,35.45,140.15,35.92"
+# 陰影起伏を入れるか（true で標高タイルも取得して地図に入れる）。
+# 端末での描画が重くなり、縮小時に山地が灰色っぽく見えるので既定では入れない
+hillshade := "false"
 # データの置き場所
 #   data/tiles/   取得したタイル（MBTiles）。再取得せずに使い回す
 #   data/work/    処理中の一時ファイル。just img の開始時に作り直す（just clean で削除）
@@ -29,8 +32,9 @@ default:
 build:
     cargo build --release
 
-# ベクタタイルと標高タイルを取得する（取得済みのタイルは飛ばすので、中断後の再実行で続きから取得）
-fetch: fetch-vector fetch-dem
+# タイルを取得する（取得済みのタイルは飛ばすので、中断後の再実行で続きから取得）
+fetch: fetch-vector
+    {{ if hillshade == "true" { just_executable() + " area=" + area + " bbox=" + bbox + " fetch-dem" } else { "" } }}
 
 # ベクタタイル（地理院地図Vector）を取得する
 fetch-vector: build
@@ -46,7 +50,7 @@ fetch-dem: build
 img *args: build
     rm -rf {{work_dir}}
     mkdir -p {{work_dir}} {{output_dir}}
-    {{bin}} build {{tiles}} --dem {{dem}} -o {{img_file}} --work-dir {{work_dir}} {{args}}
+    {{bin}} build {{tiles}} {{ if hillshade == "true" { "--dem " + dem } else { "" } }} -o {{img_file}} --work-dir {{work_dir}} {{args}}
 
 # 取得から .img 作成までまとめて行う
 all: fetch img
