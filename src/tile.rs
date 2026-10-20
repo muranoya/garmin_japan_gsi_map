@@ -22,6 +22,25 @@ impl TileCoord {
     pub fn from_tms(z: u8, x: u32, tms_row: u32) -> Self {
         Self { z, x, y: (1u32 << z) - 1 - tms_row }
     }
+
+    /// タイルが占める経緯度の範囲。
+    pub fn bbox(&self) -> BBox {
+        let (min_lon, max_lat) = tile_to_lonlat(self.x, self.y, self.z);
+        let (max_lon, min_lat) = tile_to_lonlat(self.x + 1, self.y + 1, self.z);
+        BBox { min_lon, min_lat, max_lon, max_lat }
+    }
+
+    /// ズーム `z` で同じ場所を占めるタイル（親なら 1 枚、子ならすべて）。
+    pub fn at_zoom(&self, z: u8) -> impl Iterator<Item = TileCoord> + use<> {
+        let (x0, y0, n) = if z <= self.z {
+            let s = self.z - z;
+            (self.x >> s, self.y >> s, 1)
+        } else {
+            let s = z - self.z;
+            (self.x << s, self.y << s, 1u32 << s)
+        };
+        (y0..y0 + n).flat_map(move |y| (x0..x0 + n).map(move |x| TileCoord { z, x, y }))
+    }
 }
 
 impl fmt::Display for TileCoord {
@@ -75,10 +94,9 @@ impl BBox {
         (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| TileCoord { z, x, y }))
     }
 
-    pub fn tile_count(&self, z: u8) -> u64 {
-        let (x0, y0) = lonlat_to_tile(self.min_lon, self.max_lat, z);
-        let (x1, y1) = lonlat_to_tile(self.max_lon, self.min_lat, z);
-        u64::from(x1 - x0 + 1) * u64::from(y1 - y0 + 1)
+    /// タイルの範囲をすべて包含する範囲。タイルがなければ None。
+    pub fn of_tiles(tiles: &[TileCoord]) -> Option<BBox> {
+        tiles.iter().map(TileCoord::bbox).reduce(|a, b| a.union(&b))
     }
 }
 
@@ -103,6 +121,22 @@ impl fmt::Display for BBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{},{},{},{}", self.min_lon, self.min_lat, self.max_lon, self.max_lat)
     }
+}
+
+/// `tiles` と同じ場所を占めるズーム `z` のタイルを、重複なく北西から順に返す。
+pub fn covering(tiles: &[TileCoord], z: u8) -> Vec<TileCoord> {
+    let mut out: Vec<TileCoord> = tiles.iter().flat_map(|t| t.at_zoom(z)).collect();
+    out.sort_unstable_by_key(|t| (t.y, t.x));
+    out.dedup();
+    out
+}
+
+/// タイルの北西の角の経緯度。
+fn tile_to_lonlat(x: u32, y: u32, z: u8) -> (f64, f64) {
+    let n = f64::from(1u32 << z);
+    let lon = f64::from(x) / n * 360.0 - 180.0;
+    let lat = (PI * (1.0 - 2.0 * f64::from(y) / n)).sinh().atan().to_degrees();
+    (lon, lat)
 }
 
 /// 経緯度を含むタイルの (x, y) を返す。範囲の端はタイル番号の上限に丸める。
@@ -140,11 +174,36 @@ mod tests {
     }
 
     #[test]
-    fn bboxのタイル列挙と件数が一致する() {
+    fn bboxのタイル列挙() {
         let b: BBox = "138.95,35.70,139.25,35.90".parse().unwrap();
-        for z in [12, 14, 16] {
-            assert_eq!(b.tiles(z).count() as u64, b.tile_count(z));
-        }
+        let tiles: Vec<_> = b.tiles(14).collect();
+        assert_eq!(tiles.len(), 15 * 12);
+        // 列挙したタイルの範囲は元の範囲を包含する
+        let covered = BBox::of_tiles(&tiles).unwrap();
+        assert_eq!(covered.union(&b), covered);
+    }
+
+    #[test]
+    fn タイルの範囲は元の経緯度を含む() {
+        let b = TileCoord { z: 16, x: 58089, y: 25777 }.bbox();
+        assert!(b.min_lon <= 139.096 && 139.096 < b.max_lon);
+        assert!(b.min_lat < 35.809 && 35.809 <= b.max_lat);
+    }
+
+    #[test]
+    fn 別のズームで同じ場所を占めるタイル() {
+        let t = TileCoord { z: 16, x: 58089, y: 25777 };
+        assert_eq!(t.at_zoom(14).collect::<Vec<_>>(), [TileCoord { z: 14, x: 14522, y: 6444 }]);
+        assert_eq!(t.at_zoom(16).collect::<Vec<_>>(), [t]);
+        let children: Vec<_> = TileCoord { z: 14, x: 1, y: 2 }.at_zoom(15).collect();
+        assert_eq!(children, [(2, 4), (3, 4), (2, 5), (3, 5)].map(|(x, y)| TileCoord { z: 15, x, y }));
+    }
+
+    #[test]
+    fn 覆うタイルは重複を除く() {
+        let tiles = [(58089, 25777), (58088, 25776), (58100, 25777)].map(|(x, y)| TileCoord { z: 16, x, y });
+        let z14 = covering(&tiles, 14);
+        assert_eq!(z14, [(14522, 6444), (14525, 6444)].map(|(x, y)| TileCoord { z: 14, x, y }));
     }
 
     #[test]

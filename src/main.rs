@@ -5,6 +5,7 @@ mod fetch;
 mod geom;
 mod mbtiles;
 mod mkgmap;
+mod mokuroku;
 mod mvt;
 mod osm;
 mod source;
@@ -14,7 +15,8 @@ mod tile;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use config::Config;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tile::TileCoord;
 
 /// 地理院地図Vector から Garmin 用ベクタ地図を作るツール
 ///
@@ -44,17 +46,29 @@ async fn main() -> Result<()> {
     let config = Config::load(&cli.config)?;
     match cli.command {
         Command::Fetch => {
-            let bbox = config.bbox()?;
             let vector = fetch::Dataset::Vector;
+            let url_template = config.fetch.url.clone().unwrap_or_else(|| vector.url().to_string());
+            let z = config.zoom.unwrap_or(vector.max_zoom());
+            // area = "all" のときは、地理院のタイル一覧にある z のタイルを基準に取得するタイルを決める
+            let listed: Option<Vec<TileCoord>> = match config.fetch.area {
+                config::Area::Bbox => None,
+                config::Area::All => {
+                    let dir = config.files.tiles.parent().unwrap_or(Path::new(""));
+                    let tiles = mokuroku::load(&fetch::client()?, &url_template, dir).await?;
+                    Some(tiles.into_iter().filter(|t| t.z == z).collect())
+                }
+            };
+            let targets = |zooms: Vec<u8>| -> Result<fetch::Targets> {
+                Ok(match &listed {
+                    None => fetch::Targets::BBox { bbox: config.bbox()?, zooms },
+                    Some(base) => fetch::Targets::Tiles(zooms.iter().flat_map(|&z| tile::covering(base, z)).collect()),
+                })
+            };
             fetch::run(fetch::FetchOptions {
-                bbox,
-                zooms: {
-                    // 縮小表示用の注記（主な山名など）を取るため、低ズームのタイルも取得する
-                    let z = config.zoom.unwrap_or(vector.max_zoom());
-                    if z > build::OVERVIEW_ZOOM { vec![build::OVERVIEW_ZOOM, z] } else { vec![z] }
-                },
+                // 縮小表示用の注記（主な山名など）を取るため、低ズームのタイルも取得する
+                targets: targets(if z > build::OVERVIEW_ZOOM { vec![build::OVERVIEW_ZOOM, z] } else { vec![z] })?,
                 output: config.files.tiles.clone(),
-                url_template: config.fetch.url.clone().unwrap_or_else(|| vector.url().to_string()),
+                url_template,
                 concurrency: config.fetch.concurrency.into(),
                 dataset: vector,
             })
@@ -63,8 +77,7 @@ async fn main() -> Result<()> {
                 let source = config.hillshade.source.dataset();
                 eprintln!("標高タイル（陰影起伏用）を取得します");
                 fetch::run(fetch::FetchOptions {
-                    bbox,
-                    zooms: vec![source.max_zoom()],
+                    targets: targets(vec![source.max_zoom()])?,
                     output: dem.to_path_buf(),
                     url_template: config.hillshade.url.clone().unwrap_or_else(|| source.url().to_string()),
                     concurrency: config.fetch.concurrency.into(),

@@ -43,6 +43,10 @@
 - 地物コード（`ftCode`、注記の `annoCtg`）の意味は、地理院のスタイル定義
   `https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/std.json` の各レイヤの `metadata.path` から分かる
 - 同じ地物に複数の注記が付くことがある（例: 滝に `annoCtg` 323 と 822 の両方）
+- タイル一覧 `https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/mokuroku.csv.gz`（約 77MB）に、実在するタイルの
+  `パス,更新時刻,サイズ,MD5` が並ぶ。z16 は約 216 万タイル・17GB（bbox で日本全体を囲むと約 2,700 万タイルで大半が海）。
+  `fetch.area = "all"` はこの一覧のタイルを取得する（`src/mokuroku.rs`）。標高タイル（dem_png）には一覧がないので、
+  ベクタタイルの一覧を覆うタイルを取る
 
 ### DEM（補助）
 

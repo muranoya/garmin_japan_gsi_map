@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// 地図にする範囲 [最小経度, 最小緯度, 最大経度, 最大緯度]
-    bbox: [f64; 4],
+    /// 地図にする範囲 [最小経度, 最小緯度, 最大経度, 最大緯度]（fetch.area = "all" のときは不要）
+    bbox: Option<[f64; 4]>,
     /// 取得・変換に使うズームレベル（省略時はベクタタイルの最大ズーム）
     pub zoom: Option<u8>,
     pub files: Files,
@@ -47,12 +47,23 @@ pub struct Fetch {
     pub concurrency: u16,
     /// ベクタタイルの URL テンプレート（省略時は地理院の URL）
     pub url: Option<String>,
+    /// 取得するタイルの決め方
+    pub area: Area,
 }
 
 impl Default for Fetch {
     fn default() -> Self {
-        Self { concurrency: 4, url: None }
+        Self { concurrency: 4, url: None, area: Area::Bbox }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Area {
+    /// bbox の範囲内のタイル
+    Bbox,
+    /// 地理院のタイル一覧に載っているすべてのタイル（bbox は無視する）
+    All,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,7 +147,9 @@ impl Config {
     }
 
     pub fn bbox(&self) -> Result<BBox> {
-        let [a, b, c, d] = self.bbox;
+        let Some([a, b, c, d]) = self.bbox else {
+            bail!("bbox を指定してください（fetch.area = \"all\" のときは不要）");
+        };
         BBox::new(a, b, c, d)
     }
 
@@ -146,7 +159,9 @@ impl Config {
     }
 
     fn validate(&self) -> Result<()> {
-        self.bbox()?;
+        if self.bbox.is_some() || self.fetch.area == Area::Bbox {
+            self.bbox()?;
+        }
         let max = Dataset::Vector.max_zoom();
         if let Some(z) = self.zoom {
             ensure!(z <= max, "zoom は 0〜{max} で指定してください（{z}）");
@@ -211,6 +226,7 @@ mod tests {
     fn 省略した項目は既定値になる() -> Result<()> {
         let c = parse(MINIMAL)?;
         assert_eq!(c.fetch.concurrency, 4);
+        assert_eq!(c.fetch.area, Area::Bbox);
         assert_eq!(c.map.code_page, 65001);
         assert_eq!(c.build.max_nodes, 2_000_000);
         assert!(!c.hillshade.enabled);
@@ -244,5 +260,15 @@ mod tests {
         assert!(parse(&format!("{MINIMAL}\n[map]\ncodepage = 932")).is_err());
         // 範囲の最小値と最大値が逆
         assert!(parse(&MINIMAL.replace("138.95, 35.70, 139.25", "139.25, 35.70, 138.95")).is_err());
+        // 範囲がない
+        assert!(parse(&MINIMAL.replace("bbox = [138.95, 35.70, 139.25, 35.90]", "")).is_err());
+    }
+
+    #[test]
+    fn 全域を取得するときは範囲を省略できる() -> Result<()> {
+        let s = MINIMAL.replace("bbox = [138.95, 35.70, 139.25, 35.90]", "");
+        let c = parse(&format!("{s}\n[fetch]\narea = \"all\""))?;
+        assert_eq!(c.fetch.area, Area::All);
+        Ok(())
     }
 }

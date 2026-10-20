@@ -2,7 +2,7 @@
 
 use crate::mbtiles::{FetchRecord, MbTiles};
 use crate::tile::{BBox, TileCoord};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use futures::{StreamExt, stream};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Client, StatusCode, header};
@@ -57,9 +57,16 @@ impl Dataset {
 const COMMIT_EVERY: usize = 200;
 const MAX_RETRIES: u32 = 5;
 
+/// 取得するタイル。
+pub enum Targets {
+    /// 範囲に掛かるすべてのタイル
+    BBox { bbox: BBox, zooms: Vec<u8> },
+    /// 列挙したタイル（地理院のタイル一覧から作る）
+    Tiles(Vec<TileCoord>),
+}
+
 pub struct FetchOptions {
-    pub bbox: BBox,
-    pub zooms: Vec<u8>,
+    pub targets: Targets,
     pub output: PathBuf,
     pub url_template: String,
     pub concurrency: usize,
@@ -77,28 +84,34 @@ pub async fn run(opts: FetchOptions) -> Result<()> {
     }
     let db = MbTiles::open(&opts.output)?;
 
+    let (bounds, candidates) = match opts.targets {
+        Targets::BBox { bbox, zooms } => (bbox, zooms.iter().flat_map(|&z| bbox.tiles(z)).collect()),
+        Targets::Tiles(tiles) => (BBox::of_tiles(&tiles).context("取得するタイルがありません")?, tiles),
+    };
+    let mut zooms: Vec<u8> = candidates.iter().map(|t| t.z).collect();
+    zooms.sort_unstable();
+    zooms.dedup();
     let mut targets = Vec::new();
-    for &z in &opts.zooms {
+    for z in zooms {
         let done = db.fetched_tiles(z)?;
-        let total = opts.bbox.tile_count(z);
-        let before = targets.len();
-        targets.extend(opts.bbox.tiles(z).filter(|t| !done.contains(t)));
-        eprintln!(
-            "z{z}: 範囲内 {total} タイル / 取得済み {} / 今回取得 {}",
-            total - (targets.len() - before) as u64,
-            targets.len() - before
-        );
+        let (mut total, before) = (0usize, targets.len());
+        for t in candidates.iter().filter(|t| t.z == z) {
+            total += 1;
+            if !done.contains(t) {
+                targets.push(*t);
+            }
+        }
+        let todo = targets.len() - before;
+        eprintln!("z{z}: 対象 {total} タイル / 取得済み {} / 今回取得 {todo}", total - todo);
     }
+    drop(candidates);
     if targets.is_empty() {
-        db.update_metadata(&opts.bbox, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
+        db.update_metadata(&bounds, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
         eprintln!("すべて取得済みです");
         return Ok(());
     }
 
-    let client = Client::builder()
-        .user_agent(concat!("gsi2garmin/", env!("CARGO_PKG_VERSION"), " (personal use)"))
-        .timeout(Duration::from_secs(60))
-        .build()?;
+    let client = client()?;
 
     let pb = ProgressBar::new(targets.len() as u64);
     pb.set_style(ProgressStyle::with_template(
@@ -158,7 +171,7 @@ pub async fn run(opts: FetchOptions) -> Result<()> {
         pb.inc(1);
     }
     db.commit()?;
-    db.update_metadata(&opts.bbox, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
+    db.update_metadata(&bounds, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
     pb.finish_and_clear();
 
     eprintln!("保存 {saved} / データなし(404) {missing} / 失敗 {failed}");
@@ -168,6 +181,14 @@ pub async fn run(opts: FetchOptions) -> Result<()> {
         eprintln!("失敗したタイルは再実行で再取得します");
     }
     Ok(())
+}
+
+/// 地理院サーバへの HTTP クライアント。
+pub fn client() -> Result<Client> {
+    Ok(Client::builder()
+        .user_agent(concat!("gsi2garmin/", env!("CARGO_PKG_VERSION"), " (personal use)"))
+        .timeout(Duration::from_secs(60))
+        .build()?)
 }
 
 fn expand_url(template: &str, t: TileCoord) -> String {
