@@ -67,10 +67,16 @@
     1 段階目は一致する端点（3 つ以上集まる点は分岐とみなして結合しない）、2 段階目は許容距離内の相互最近傍
   - 面: タイル範囲で切り取るだけ（結合はしない）
   - 点: タイル範囲内（半開区間）のものだけを採用し、バッファによる重複を除く
-- 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`
+- 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
 - CLI:
   - `gsi2garmin fetch --bbox <minlon,minlat,maxlon,maxlat> -o area.mbtiles`
-  - `gsi2garmin build <tiles_dir|area.mbtiles> -o area.img [--work-dir <dir>] [--style <dir>] [--code-page 932]`
+  - `gsi2garmin fetch --source dem --bbox ... -o area-dem.mbtiles`（標高タイル。陰影起伏用）
+  - `gsi2garmin build <tiles_dir|area.mbtiles> -o area.img [--dem area-dem.mbtiles] [--work-dir <dir>] [--style <dir>] [--typ <file>] [--code-page 932]`
+- 見た目の定義:
+  - `style/gsi/`: mkgmap スタイル（地物 → Garmin 種別・表示解像度）。`options` の `levels` は DEM の点間隔にも使う
+  - `style/gsi.typ.txt`: TYP（色・線種・アイコン）。**`tools/gen_typ.py` から生成する**ので、変更はスクリプト側で行い
+    `python3 tools/gen_typ.py style/gsi.typ.txt` で再生成する
+- DEM: 地理院の標高 PNG タイルを 1 秒角の HGT（`src/dem.rs`）に変換して mkgmap の `--dem` に渡す
 
 ## 技術スタック
 
