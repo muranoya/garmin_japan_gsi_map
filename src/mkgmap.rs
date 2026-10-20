@@ -24,6 +24,26 @@ pub fn write_bundled_typ(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// スタイルの `options` にある `levels` の解像度に合わせた DEM の点間隔（`--dem-dists`）。
+///
+/// 解像度 24 で 3312（1 秒角の HGT とほぼ同じ間隔）とし、解像度が 1 下がるごとに倍にする。
+pub fn dem_dists(style_dir: &Path) -> Result<Vec<u32>> {
+    let options = std::fs::read_to_string(style_dir.join("options"))
+        .with_context(|| format!("スタイルの options を読めません: {}", style_dir.display()))?;
+    let levels = options
+        .lines()
+        .map(str::trim)
+        .find_map(|l| l.strip_prefix("levels")?.trim_start().strip_prefix('='))
+        .context("スタイルの options に levels がありません")?;
+    levels
+        .split(',')
+        .map(|lv| {
+            let res: u32 = lv.split(':').nth(1).context("levels の書式が不正です")?.trim().parse()?;
+            Ok(3312 << 24u32.saturating_sub(res).min(10))
+        })
+        .collect()
+}
+
 pub fn write_bundled_style(dir: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     for (name, body) in STYLE_FILES {
@@ -75,13 +95,14 @@ pub struct MapInfo {
 }
 
 /// mkgmap を実行して gmapsupp.img を作る。生成したファイルのパスを返す。
-/// `inputs` には OSM ファイルと TYP のテキストファイルを渡す。
+/// `inputs` には OSM ファイルと TYP のテキストファイルを渡す。`extra` は追加の mkgmap オプション。
 pub fn run(
     jar: &Path,
     style_dir: &Path,
     inputs: &[PathBuf],
     out_dir: &Path,
     info: &MapInfo,
+    extra: &[String],
 ) -> Result<PathBuf> {
     std::fs::create_dir_all(out_dir)?;
     let mut cmd = Command::new("java");
@@ -98,6 +119,7 @@ pub fn run(
         .arg(format!("--area-name={}", info.description))
         .arg(format!("--description={}", info.description))
         .arg("--gmapsupp")
+        .args(extra)
         .args(inputs);
     eprintln!("mkgmap を実行します");
     let status = cmd
@@ -111,4 +133,25 @@ pub fn run(
         bail!("mkgmap の出力に gmapsupp.img がありません: {}", out_dir.display());
     }
     Ok(img)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn levelsからdemの点間隔を決める() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("options"), "# c\nlevels = 0:24, 1:23, 2:22, 3:20\n")?;
+        assert_eq!(dem_dists(dir.path())?, vec![3312, 6624, 13248, 52992]);
+        Ok(())
+    }
+
+    #[test]
+    fn 同梱スタイルのlevelsを読める() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_bundled_style(dir.path())?;
+        assert!(!dem_dists(dir.path())?.is_empty());
+        Ok(())
+    }
 }

@@ -1,4 +1,5 @@
 mod build;
+mod dem;
 mod fetch;
 mod geom;
 mod mbtiles;
@@ -66,6 +67,9 @@ enum Command {
         /// TYP ファイル（テキスト形式。省略時は同梱の style/gsi.typ.txt）
         #[arg(long)]
         typ: Option<PathBuf>,
+        /// 陰影起伏用の標高タイル（`fetch --source dem` で取得した MBTiles またはフォルダ）
+        #[arg(long)]
+        dem: Option<PathBuf>,
         /// 端末の地図一覧に表示する名前
         #[arg(long, default_value = "地理院地図Vector")]
         name: String,
@@ -106,6 +110,7 @@ async fn main() -> Result<()> {
             mkgmap,
             work_dir,
             typ,
+            dem,
             name,
             description,
             code_page,
@@ -122,6 +127,7 @@ async fn main() -> Result<()> {
                 mkgmap,
                 work_dir,
                 typ,
+                dem,
                 map: mkgmap::MapInfo { family_id, name, description, code_page },
             })
             .await

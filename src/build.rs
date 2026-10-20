@@ -1,5 +1,6 @@
 //! ベクタタイル → OSM XML → mkgmap → .img の変換。
 
+use crate::dem::{self, Dem};
 use crate::geom::{self, Grid, P};
 use crate::mkgmap::{self, MapInfo};
 use crate::mvt::{self, Geometry};
@@ -24,6 +25,7 @@ pub struct BuildOptions {
     pub mkgmap: Option<PathBuf>,
     pub work_dir: Option<PathBuf>,
     pub typ: Option<PathBuf>,
+    pub dem: Option<PathBuf>,
     pub map: MapInfo,
 }
 
@@ -77,8 +79,23 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
         }
     };
 
+    let mut extra = Vec::new();
+    if let Some(dem_path) = &opts.dem {
+        let started = Instant::now();
+        let dem = Dem::load(&TileSource::open(dem_path)?)?;
+        let hgt_dir = work.join("hgt");
+        let n = dem::write_hgt(&dem, collected.bounds, &hgt_dir)?;
+        eprintln!("DEM → HGT {n} ファイル: {:.1?}", started.elapsed());
+        let dists = mkgmap::dem_dists(&style_dir)?;
+        extra.push(format!("--dem={}", hgt_dir.display()));
+        extra.push(format!(
+            "--dem-dists={}",
+            dists.iter().map(u32::to_string).collect::<Vec<_>>().join(",")
+        ));
+    }
+
     let started = Instant::now();
-    let img = mkgmap::run(&jar, &style_dir, &[osm_path, typ], &work.join("out"), &opts.map)?;
+    let img = mkgmap::run(&jar, &style_dir, &[osm_path, typ], &work.join("out"), &opts.map, &extra)?;
     eprintln!("mkgmap: {:.1?}", started.elapsed());
 
     std::fs::copy(&img, &opts.output)
@@ -89,6 +106,8 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
 
 struct Collected {
     grid: Grid,
+    /// 入力タイル範囲の経緯度 [min_lon, min_lat, max_lon, max_lat]
+    bounds: [f64; 4],
     tag_table: Vec<Tags>,
     items: Vec<Item>,
 }
@@ -122,6 +141,7 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
     let mut items: Vec<Item> = Vec::new();
     let mut line_pieces: HashMap<usize, Vec<Vec<P>>> = HashMap::new();
     let mut tiles = 0usize;
+    let (mut tmin, mut tmax) = ((u32::MAX, u32::MAX), (0u32, 0u32));
 
     src.for_each_batch(z, 256, |batch| {
         let outs: Vec<(u32, TileOut)> = batch
@@ -148,6 +168,10 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
             }
         }
         tiles += batch.len();
+        for (t, _) in &batch {
+            tmin = (tmin.0.min(t.x), tmin.1.min(t.y));
+            tmax = (tmax.0.max(t.x), tmax.1.max(t.y));
+        }
         Ok(())
     })?;
 
@@ -168,7 +192,9 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
         "z{z}: {tiles} タイル / 線 {pieces} 断片 → {merged_count} 本に結合 / 地物 {} 件",
         items.len()
     );
-    Ok(Collected { grid, tag_table, items })
+    let (west, north) = grid.to_lonlat(grid.tile_bounds(tmin.0, tmin.1).min);
+    let (east, south) = grid.to_lonlat(grid.tile_bounds(tmax.0, tmax.1).max);
+    Ok(Collected { grid, bounds: [west, south, east, north], tag_table, items })
 }
 
 /// タイルをデコードし、タイル範囲で切り取る。地物のないタイルは `None`。
