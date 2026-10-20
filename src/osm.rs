@@ -1,11 +1,12 @@
 //! mkgmap に渡す OSM XML の書き出し。
 
-use crate::geom::{Grid, P};
+use crate::geom::{Bounds, Grid, P};
 use anyhow::Result;
 use std::io::Write;
 
 pub type Tags = Vec<(String, String)>;
 
+#[derive(Clone)]
 pub enum Feature {
     Point(P),
     Line(Vec<P>),
@@ -14,6 +15,7 @@ pub enum Feature {
 }
 
 /// タグ付きの地物。`tags` はタグ集合の表（`TagTable`）への添字。
+#[derive(Clone)]
 pub struct Item {
     pub tags: usize,
     pub feature: Feature,
@@ -23,9 +25,24 @@ pub struct Item {
 ///
 /// ノード → ウェイ → リレーションの順に出力する必要があるため、地物列を 3 回走査する。
 /// ID は走査順に決まるので、各パスで同じ規則で採番すれば参照が一致する。
-pub fn write<W: Write>(w: &mut W, grid: &Grid, tag_table: &[Tags], items: &[Item]) -> Result<()> {
+/// `bounds` を指定すると `<bounds>` を出力する（mkgmap はこれをタイルの範囲として使う）。
+pub fn write<W: Write>(
+    w: &mut W,
+    grid: &Grid,
+    bounds: Option<&Bounds>,
+    tag_table: &[Tags],
+    items: &[Item],
+) -> Result<()> {
     writeln!(w, "<?xml version='1.0' encoding='UTF-8'?>")?;
     writeln!(w, "<osm version='0.6' generator='gsi2garmin'>")?;
+    if let Some(b) = bounds {
+        let (min_lon, max_lat) = grid.to_lonlat(b.min);
+        let (max_lon, min_lat) = grid.to_lonlat(b.max);
+        writeln!(
+            w,
+            "<bounds minlat='{min_lat:.7}' minlon='{min_lon:.7}' maxlat='{max_lat:.7}' maxlon='{max_lon:.7}'/>"
+        )?;
+    }
 
     // ノード
     let mut node_id = 0u64;
@@ -154,7 +171,7 @@ mod tests {
             Item { tags: 1, feature: Feature::Polygon(vec![sq(20.0), sq(20.5)]) },
         ];
         let mut out = Vec::new();
-        write(&mut out, &grid, &table, &items)?;
+        write(&mut out, &grid, None, &table, &items)?;
         let xml = String::from_utf8(out)?;
 
         assert!(xml.contains("<tag k='knj' v='雲取山 &amp; &lt;x&gt;'/>"));

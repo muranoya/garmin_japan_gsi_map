@@ -154,6 +154,25 @@ pub fn clip_polygon(rings: &[Vec<P>], b: &Bounds) -> MultiPolygon<f64> {
     poly.intersection(&rect.to_polygon())
 }
 
+/// geo のポリゴンを [外周, 穴, ...] のリング列にする（各リングは始点を末尾に繰り返さない）。
+/// 外周が 3 点未満に潰れたものは `None`、潰れた穴は捨てる。
+pub fn polygon_rings(poly: &Polygon<f64>) -> Option<Vec<Vec<P>>> {
+    let ring = |ls: &LineString<f64>| -> Vec<P> {
+        let mut v: Vec<P> = ls.coords().map(|c| [c.x, c.y]).collect();
+        if v.len() > 1 && v.first() == v.last() {
+            v.pop();
+        }
+        v
+    };
+    let exterior = ring(poly.exterior());
+    if exterior.len() < 3 {
+        return None;
+    }
+    let mut rings = vec![exterior];
+    rings.extend(poly.interiors().iter().map(ring).filter(|r| r.len() >= 3));
+    Some(rings)
+}
+
 /// タイル境界上の端点が近接する線を結合する。
 ///
 /// 地理院のタイルは隣接タイル間で境界付近の形状がわずかに異なることがあり、

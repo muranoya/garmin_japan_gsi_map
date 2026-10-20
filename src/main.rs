@@ -7,6 +7,7 @@ mod mkgmap;
 mod mvt;
 mod osm;
 mod source;
+mod split;
 mod tile;
 
 use anyhow::{Result, ensure};
@@ -70,6 +71,10 @@ enum Command {
         /// 陰影起伏用の標高タイル（`fetch --source dem` で取得した MBTiles またはフォルダ）
         #[arg(long)]
         dem: Option<PathBuf>,
+        /// 地図を分割するときの 1 区画あたりのノード数の上限。
+        /// mkgmap が「RGN section ... is too big」で失敗する場合は小さくする
+        #[arg(long, default_value_t = 2_000_000)]
+        max_nodes: usize,
         /// 端末の地図一覧に表示する名前
         #[arg(long, default_value = "地理院地図Vector")]
         name: String,
@@ -111,6 +116,7 @@ async fn main() -> Result<()> {
             work_dir,
             typ,
             dem,
+            max_nodes,
             name,
             description,
             code_page,
@@ -128,6 +134,7 @@ async fn main() -> Result<()> {
                 work_dir,
                 typ,
                 dem,
+                max_nodes,
                 map: mkgmap::MapInfo { family_id, name, description, code_page },
             })
             .await

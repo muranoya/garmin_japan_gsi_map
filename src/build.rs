@@ -1,11 +1,12 @@
-//! ベクタタイル → OSM XML → mkgmap → .img の変換。
+//! ベクタタイル → OSM XML（区画ごと）→ mkgmap → .img の変換。
 
 use crate::dem::{self, Dem};
-use crate::geom::{self, Grid, P};
+use crate::geom::{self, Bounds, Grid, P};
 use crate::mkgmap::{self, MapInfo};
 use crate::mvt::{self, Geometry};
 use crate::osm::{self, Feature, Item, Tags};
 use crate::source::TileSource;
+use crate::split;
 use crate::tile::TileCoord;
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
@@ -26,6 +27,8 @@ pub struct BuildOptions {
     pub work_dir: Option<PathBuf>,
     pub typ: Option<PathBuf>,
     pub dem: Option<PathBuf>,
+    /// 1 区画（mkgmap のタイル）あたりのノード数の上限
+    pub max_nodes: usize,
     pub map: MapInfo,
 }
 
@@ -49,15 +52,27 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     let collected = collect(&opts)?;
     eprintln!("タイルの読み込み・切り取り・結合: {:.1?}", started.elapsed());
 
-    let osm_path = work.join("gsi.osm");
+    // 地図を mkgmap のタイル（区画）に分けて、区画ごとに OSM XML を書き出す
     let started = Instant::now();
-    {
-        let mut w = BufWriter::new(std::fs::File::create(&osm_path)?);
-        osm::write(&mut w, &collected.grid, &collected.tag_table, &collected.items)?;
-    }
-    let size = std::fs::metadata(&osm_path)?.len();
+    let parts = split::plan(&collected.items, collected.area, opts.max_nodes);
+    let osm_dir = work.join("osm");
+    std::fs::create_dir_all(&osm_dir)?;
+    // mkgmap は 8 桁の数字のファイル名をそのタイルの mapname として使う
+    let osm_paths: Vec<PathBuf> = parts
+        .par_iter()
+        .enumerate()
+        .map(|(i, area)| -> Result<PathBuf> {
+            let path = osm_dir.join(format!("{}{:04}.osm", opts.map.family_id, i + 1));
+            let items = split::clip_items(&collected.items, area);
+            let mut w = BufWriter::new(std::fs::File::create(&path)?);
+            osm::write(&mut w, &collected.grid, Some(area), &collected.tag_table, &items)?;
+            Ok(path)
+        })
+        .collect::<Result<_>>()?;
+    let size: u64 = osm_paths.iter().map(|p| std::fs::metadata(p).map_or(0, |m| m.len())).sum();
     eprintln!(
-        "OSM XML 書き出し: {:.1?}（{:.1} MB）",
+        "OSM XML 書き出し: {} 区画 {:.1?}（{:.1} MB）",
+        osm_paths.len(),
         started.elapsed(),
         size as f64 / 1e6
     );
@@ -95,7 +110,9 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     }
 
     let started = Instant::now();
-    let img = mkgmap::run(&jar, &style_dir, &[osm_path, typ], &work.join("out"), &opts.map, &extra)?;
+    let mut inputs = osm_paths;
+    inputs.push(typ);
+    let img = mkgmap::run(&jar, &style_dir, &inputs, &work.join("out"), &opts.map, &extra)?;
     eprintln!("mkgmap: {:.1?}", started.elapsed());
 
     std::fs::copy(&img, &opts.output)
@@ -108,6 +125,8 @@ struct Collected {
     grid: Grid,
     /// 入力タイル範囲の経緯度 [min_lon, min_lat, max_lon, max_lat]
     bounds: [f64; 4],
+    /// 入力タイル範囲（全世界ピクセル座標）
+    area: Bounds,
     tag_table: Vec<Tags>,
     items: Vec<Item>,
 }
@@ -192,9 +211,10 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
         "z{z}: {tiles} タイル / 線 {pieces} 断片 → {merged_count} 本に結合 / 地物 {} 件",
         items.len()
     );
-    let (west, north) = grid.to_lonlat(grid.tile_bounds(tmin.0, tmin.1).min);
-    let (east, south) = grid.to_lonlat(grid.tile_bounds(tmax.0, tmax.1).max);
-    Ok(Collected { grid, bounds: [west, south, east, north], tag_table, items })
+    let area = Bounds { min: grid.tile_bounds(tmin.0, tmin.1).min, max: grid.tile_bounds(tmax.0, tmax.1).max };
+    let (west, north) = grid.to_lonlat(area.min);
+    let (east, south) = grid.to_lonlat(area.max);
+    Ok(Collected { grid, bounds: [west, south, east, north], area, tag_table, items })
 }
 
 /// タイルをデコードし、タイル範囲で切り取る。地物のないタイルは `None`。
@@ -236,16 +256,7 @@ fn process_tile(t: TileCoord, data: &[u8]) -> Result<Option<(u32, TileOut)>> {
                     for rings in polys {
                         let rings: Vec<Vec<P>> = rings.iter().map(|r| global(r)).collect();
                         for poly in geom::clip_polygon(&rings, &bounds) {
-                            let ring = |ls: &geo::LineString<f64>| -> Vec<P> {
-                                let mut v: Vec<P> = ls.coords().map(|c| [c.x, c.y]).collect();
-                                if v.len() > 1 && v.first() == v.last() {
-                                    v.pop();
-                                }
-                                v
-                            };
-                            let mut rs = vec![ring(poly.exterior())];
-                            rs.extend(poly.interiors().iter().map(ring).filter(|r| r.len() >= 3));
-                            if rs[0].len() >= 3 {
+                            if let Some(rs) = geom::polygon_rings(&poly) {
                                 out.polygons.push((tags.clone(), rs));
                             }
                         }
