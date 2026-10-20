@@ -26,5 +26,7 @@ rustc-ice-*.txt
 # 取得したタイル・生成した地図（コミットしない）
 *.mbtiles
 *.mbtiles-journal
+*.mbtiles-shm
+*.mbtiles-wal
 *.img
 /data/
