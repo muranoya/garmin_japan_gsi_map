@@ -163,6 +163,16 @@ FontStyle=NoLabel
 [end]
 
 [_line]
+Type=0x04
+String=鉄道（縮小表示）
+UseOrientation=N
+LineWidth=3
+Xpm="0 0 1 0"
+"a c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
 Type=0x10e05
 String=鉄道（トンネル）
 UseOrientation=Y

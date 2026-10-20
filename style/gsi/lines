@@ -41,12 +41,15 @@ gsi_layer=road [0x07 resolution 23]
 # rtCode の上位 5 桁: 40201,40216 JR / 40202,40205 JR以外 / 40203 地下鉄 / 40204 路面 / 40206 索道
 # railState 2,3,100,300 トンネル・地下 / snglDbl 3 側線
 gsi_layer=railway & ftCode!=8201 { deletealltags }
-# トンネルはズームアウトしても線がつながって見えるよう、地上部と同じ段から表示する
-gsi_layer=railway & railState ~ '2|3|100|300' [0x10e05 resolution 18]
+# 端末は鉄道の種別（0x14 や拡張種別）を、.img の段にかかわらず拡大するまで描かない。
+# 縮小表示（解像度 18〜22）では、道路の種別 0x04（このスタイルでは未使用）でも出力して描かせる。
+# 見た目は TYP で鉄道にしている。トンネルも線がつながって見えるよう同じ種別にする。
+gsi_layer=railway & snglDbl!=3 & !(rtCode ~ '4020[46].*') [0x04 resolution 18-22 continue]
+gsi_layer=railway & railState ~ '2|3|100|300' [0x10e05 resolution 23]
 gsi_layer=railway & snglDbl=3 [0x10e04 resolution 23]
 gsi_layer=railway & rtCode ~ '4020[46].*' [0x10e04 resolution 23]
-gsi_layer=railway & rtCode ~ '40201.*|40216.*' [0x14 resolution 18]
-gsi_layer=railway [0x10e04 resolution 18]
+gsi_layer=railway & rtCode ~ '40201.*|40216.*' [0x14 resolution 23]
+gsi_layer=railway [0x10e04 resolution 23]
 
 # ---- 河川 ----
 # 5201,5301 通常部 / 5203 堤防等に接する部分 / 5302 枯れ川部 / 5321 人工水路（空間）/ 5322 人工水路（地下）
