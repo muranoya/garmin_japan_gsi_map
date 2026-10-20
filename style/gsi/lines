@@ -5,14 +5,16 @@
 # ---- 等高線 ----
 # ftCode 7351 通常部 / 7352 数値部 / 7353 崖部。等深線（737x）は扱わない。
 # 標高は Garmin の慣例に従いフィートで名前に入れる（端末側で設定単位に換算表示される）。
-# ズームアウトに応じて 補助曲線 → 主曲線(10m) → 計曲線(50m) → 100m ごと の順に間引く。
+# ズームアウトに応じて 補助曲線と主曲線(10m) → 20m ごと → 計曲線(50m) → 100m ごと の順に間引く。
 # 判定は標高の末尾の数字で行う（例: 100m ごとは末尾 "00"）。
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*00'
     { name '${alti|conv:m=>ft}' } [0x22 resolution 20]
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*50'
     { name '${alti|conv:m=>ft}' } [0x22 resolution 21]
-gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*0'
+gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[02468]0'
     { name '${alti|conv:m=>ft}' } [0x21 resolution 23]
+gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*0'
+    { name '${alti|conv:m=>ft}' } [0x21 resolution 24]
 gsi_layer=contour & ftCode ~ '735[123]'
     { name '${alti|conv:m=>ft}' } [0x20 resolution 24]
 
