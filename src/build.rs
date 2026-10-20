@@ -18,6 +18,10 @@ use std::time::Instant;
 /// タイル境界で線を結合するときの端点の許容距離（ピクセル）。z16 で 8px ≒ 1m。
 const MERGE_TOLERANCE_PX: f64 = 8.0;
 
+/// 縮小表示用の注記を取るズーム。地理院は小縮尺の地図向けに主な山名などを選んで低ズームのタイルに
+/// 収録しているので、このズームのタイルの点を `gsi_zoom` タグ付きで加え、どれを使うかはスタイルで決める。
+pub const OVERVIEW_ZOOM: u8 = 10;
+
 pub struct BuildOptions {
     pub input: PathBuf,
     pub output: PathBuf,
@@ -223,9 +227,40 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
         items.len()
     );
     let area = Bounds { min: grid.tile_bounds(tmin.0, tmin.1).min, max: grid.tile_bounds(tmax.0, tmax.1).max };
+
+    if z > OVERVIEW_ZOOM && zooms.contains(&OVERVIEW_ZOOM) {
+        let points = overview_points(&src, grid, &area)?;
+        eprintln!("z{OVERVIEW_ZOOM}: 縮小表示用の点 {} 件", points.len());
+        for (tags, p) in points {
+            items.push(Item { tags: intern(tags), feature: Feature::Point(p) });
+        }
+    }
     let (west, north) = grid.to_lonlat(area.min);
     let (east, south) = grid.to_lonlat(area.max);
     Ok(Collected { grid, bounds: [west, south, east, north], area, tag_table, items })
+}
+
+/// 縮小表示用のズームのタイルから点地物を読み、`grid` の座標に換算して `area` 内のものを返す。
+/// 区別できるように `gsi_zoom` タグを付ける。
+fn overview_points(src: &TileSource, grid: Grid, area: &Bounds) -> Result<Vec<(Tags, P)>> {
+    let mut points = Vec::new();
+    src.for_each_batch(OVERVIEW_ZOOM, 256, |batch| {
+        for (t, data) in batch {
+            let Some((extent, out)) = process_tile(t, &data).with_context(|| format!("タイル {t}"))? else {
+                continue;
+            };
+            let scale = f64::from(1u32 << (grid.z - OVERVIEW_ZOOM)) * f64::from(grid.extent) / f64::from(extent);
+            for (mut tags, p) in out.points {
+                let p = [p[0] * scale, p[1] * scale];
+                if area.contains_half_open(p) {
+                    tags.push(("gsi_zoom".to_string(), OVERVIEW_ZOOM.to_string()));
+                    points.push((tags, p));
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(points)
 }
 
 /// タイルをデコードし、タイル範囲で切り取る。地物のないタイルは `None`。

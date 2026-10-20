@@ -48,7 +48,11 @@ async fn main() -> Result<()> {
             let vector = fetch::Dataset::Vector;
             fetch::run(fetch::FetchOptions {
                 bbox,
-                zooms: vec![config.zoom.unwrap_or(vector.max_zoom())],
+                zooms: {
+                    // 縮小表示用の注記（主な山名など）を取るため、低ズームのタイルも取得する
+                    let z = config.zoom.unwrap_or(vector.max_zoom());
+                    if z > build::OVERVIEW_ZOOM { vec![build::OVERVIEW_ZOOM, z] } else { vec![z] }
+                },
                 output: config.files.tiles.clone(),
                 url_template: config.fetch.url.clone().unwrap_or_else(|| vector.url().to_string()),
                 concurrency: config.fetch.concurrency.into(),
