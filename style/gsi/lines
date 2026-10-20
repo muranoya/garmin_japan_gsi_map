@@ -1,13 +1,16 @@
 # ---- 等高線 ----
 # ftCode 7351 通常部 / 7352 数値部 / 7353 崖部。等深線（737x）は扱わない。
 # 標高は Garmin の慣例に従いフィートで名前に入れる（端末側で設定単位に換算表示される）。
-# 計曲線（50m ごと）/ 主曲線（10m ごと）/ 補助曲線 を末尾の数字で判定する。
-gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[05]0'
+# ズームアウトに応じて 補助曲線 → 主曲線(10m) → 計曲線(50m) → 100m ごと の順に間引く。
+# 判定は標高の末尾の数字で行う（例: 100m ごとは末尾 "00"）。
+gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*00'
     { name '${alti|conv:m=>ft}' } [0x22 resolution 20]
+gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*50'
+    { name '${alti|conv:m=>ft}' } [0x22 resolution 21]
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*0'
-    { name '${alti|conv:m=>ft}' } [0x21 resolution 22]
+    { name '${alti|conv:m=>ft}' } [0x21 resolution 23]
 gsi_layer=contour & ftCode ~ '735[123]'
-    { name '${alti|conv:m=>ft}' } [0x20 resolution 23]
+    { name '${alti|conv:m=>ft}' } [0x20 resolution 24]
 
 # ---- 道路 ----
 # ftCode 2721-2723 徒歩道 / 2731-2734 石段 / 2711,2713,2714 庭園路
@@ -36,3 +39,4 @@ gsi_layer=river & ftCode=5321 [0x18 resolution 23]
 gsi_layer=boundary & ftCode=1211 [0x1d resolution 19]
 gsi_layer=boundary & ftCode=1212 [0x1c resolution 21]
 gsi_layer=structurel & ftCode=8202 [0x29 resolution 22]
+
