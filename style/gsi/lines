@@ -31,7 +31,7 @@ gsi_layer=road & rdCtg=0 [0x02 resolution 18]
 gsi_layer=road & rdCtg=1 [0x03 resolution 20]
 gsi_layer=road & rnkWidth ~ '[34]' [0x05 resolution 21]
 gsi_layer=road & rnkWidth=2 [0x05 resolution 22]
-gsi_layer=road & rnkWidth=1 [0x06 resolution 22]
+gsi_layer=road & rnkWidth=1 [0x06 resolution 23]
 gsi_layer=road [0x07 resolution 23]
 
 # ---- 鉄道 ----
@@ -61,6 +61,7 @@ gsi_layer=structurel & ftCode=8202 [0x29 resolution 23]
 # ---- 地形表現（landforml）----
 # 7501,7502,7509,7511,7512,7541 岩・崖等 / 7521 雨裂（上部）/ 5521 滝（線）
 # 0x10e00 以降は Garmin 標準にない拡張種別。表示は TYP（style/gsi.typ.txt）で定義する
-gsi_layer=landforml & ftCode ~ '750[129]|751[12]|7541' [0x10e00 resolution 22]
+# 岩・崖は本数が多く縮小表示を重くするので、等高線（10m）と同じ段から表示する
+gsi_layer=landforml & ftCode ~ '750[129]|751[12]|7541' [0x10e00 resolution 23]
 gsi_layer=landforml & ftCode=7521 [0x10e01 resolution 23]
 gsi_layer=landforml & ftCode=5521 [0x10e02 resolution 22]
