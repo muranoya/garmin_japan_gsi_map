@@ -40,3 +40,9 @@ gsi_layer=boundary & ftCode=1211 [0x1d resolution 19]
 gsi_layer=boundary & ftCode=1212 [0x1c resolution 21]
 gsi_layer=structurel & ftCode=8202 [0x29 resolution 22]
 
+# ---- 地形表現（landforml）----
+# 7501,7502,7509,7511,7512,7541 岩・崖等 / 7521 雨裂（上部）/ 5521 滝（線）
+# 0x10e00 以降は Garmin 標準にない拡張種別。表示は TYP（style/gsi.typ.txt）で定義する
+gsi_layer=landforml & ftCode ~ '750[129]|751[12]|7541' [0x10e00 resolution 22]
+gsi_layer=landforml & ftCode=7521 [0x10e01 resolution 23]
+gsi_layer=landforml & ftCode=5521 [0x10e02 resolution 22]

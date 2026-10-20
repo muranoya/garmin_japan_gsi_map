@@ -1,24 +1,50 @@
+# 注記はすべて文字だけで表示する（TYP でアイコンを透明にしている）。
+# 種別を分けているのは、文字の大きさ・色の違いと端末の検索で分類するため。
+
 # ---- 注記（label レイヤ, ftCode 100）----
-# annoCtg の意味は std.json の「注記-*」を参照
+# annoCtg の意味は std.json の「注記-*」を参照。
+# 同じ滝に 323（沢・滝等）と 822（滝）の両方の注記が付くため、323 の滝は捨てる
+gsi_layer=label & annoCtg=323 & knj ~ '.*滝' { deletealltags }
 # 311-316 山名 / 810 山
 gsi_layer=label & annoCtg ~ '31[1-6]|810' { name '${knj}' } [0x6616 resolution 21]
 # 832 峠
 gsi_layer=label & annoCtg=832 { name '${knj}' } [0x660b resolution 22]
 # 822 滝
 gsi_layer=label & annoCtg=822 { name '${knj}' } [0x6508 resolution 22]
-# 321 湖・沼・池 / 820 湖沼
-gsi_layer=label & annoCtg ~ '321|820' { name '${knj}' } [0x650d resolution 21]
+# 321 湖・沼・池 / 820 湖沼 / 322 河川・用水
+gsi_layer=label & annoCtg ~ '32[12]|820' { name '${knj}' } [0x650d resolution 22]
 # 110 市区町村
 gsi_layer=label & annoCtg=110 { name '${knj}' } [0x0800 resolution 18]
 # 210 町字名 / 220 集落名称 / 800 居住地名
 gsi_layer=label & annoCtg ~ '210|220|800' { name '${knj}' } [0x0b00 resolution 22]
 # 422 鉄道駅名
 gsi_layer=label & annoCtg=422 { name '${knj}' } [0x2f08 resolution 22]
-# 661 神社 / 662 寺院
-gsi_layer=label & annoCtg ~ '66[12]' { name '${knj}' } [0x2c0b resolution 23]
-# その他の注記は文字だけのラベルとして載せる
+# その他の注記
 gsi_layer=label & knj=* { name '${knj}' } [0x2800 resolution 23]
 
-# ---- 標高点 ----
+# ---- 標高点（elevation レイヤ）----
 # 7201 標高点
-gsi_layer=elevation & ftCode=7201 { name '${alti}' } [0x2800 resolution 23]
+gsi_layer=elevation & ftCode=7201 { name '${alti}' } [0x2801 resolution 22]
+
+# ---- 地図記号（symbol レイヤ）----
+# 0x28xx の各種別に TYP で地理院風のアイコンを割り当てている
+# 7102 三角点 / 7103 水準点
+gsi_layer=symbol & ftCode=7102 { name '${alti}' } [0x2802 resolution 22]
+gsi_layer=symbol & ftCode=7103 [0x2803 resolution 24]
+# 3231 神社 / 3232 寺院
+gsi_layer=symbol & ftCode=3231 [0x2805 resolution 23]
+gsi_layer=symbol & ftCode=3232 [0x2806 resolution 23]
+# 6331 温泉
+gsi_layer=symbol & ftCode=6331 [0x2807 resolution 22]
+# 3218 郵便局 / 3243 病院 / 3212,3213,3214 学校
+gsi_layer=symbol & ftCode=3218 [0x2808 resolution 24]
+gsi_layer=symbol & ftCode=3243 [0x2809 resolution 24]
+gsi_layer=symbol & ftCode ~ '321[234]' [0x280a resolution 24]
+# 4104 記念碑 / 4105 自然災害伝承碑
+gsi_layer=symbol & ftCode ~ '410[45]' [0x280b resolution 24]
+# 3211 交番 / 3241 警察署
+gsi_layer=symbol & ftCode ~ '3211|3241' [0x280c resolution 24]
+# 1402,3205 市役所 / 1403,3206 町村役場
+gsi_layer=symbol & ftCode ~ '140[23]|320[56]' [0x280e resolution 23]
+# 6341 史跡・名勝・天然記念物 / 6342 城跡
+gsi_layer=symbol & ftCode ~ '634[12]' [0x280f resolution 23]
