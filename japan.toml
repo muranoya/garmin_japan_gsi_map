@@ -1,0 +1,22 @@
+# 日本全体の地図を作る設定（`just config=japan.toml fetch` / `just config=japan.toml img`）
+#
+# 項目の説明は gsi2garmin.toml を参照。z16 は約 216 万タイル（17GB）あり、取得には丸一日以上かかる。
+# 中断しても再実行すれば続きから取得する。
+
+zoom = 16
+
+[files]
+tiles = "data/tiles/japan.mbtiles"
+dem = "data/tiles/japan-dem.mbtiles"
+work_dir = "data/work/japan"
+output = "data/output/japan.img"
+
+[fetch]
+concurrency = 4
+# 地理院のタイル一覧に載っているタイルをすべて取得する（bbox は不要）
+area = "all"
+
+[map]
+name = "地理院地図Vector"
+code_page = 65001
+family_id = 7251
