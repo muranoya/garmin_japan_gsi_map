@@ -1,7 +1,7 @@
 ; -*- coding: UTF-8 -*-
 ; 地理院地図Vector 風の TYP 定義（mkgmap の TYP コンパイラ用テキスト形式）
 ; tools/gen_typ.py で生成している。直接編集しないこと。
-; 色は地理院地図の std.json（ズーム16）に合わせている。FID/CodePage は mkgmap のオプションから設定される。
+; 色は地理院地図（ラスタの標準地図）に合わせている。FID/CodePage は mkgmap のオプションから設定される。
 
 [_drawOrder]
 Type=0x03c,1
@@ -19,7 +19,7 @@ Xpm="0 0 1 0"
 Type=0x13
 String=建物
 Xpm="0 0 1 0"
-"a c #FFD7AA"
+"a c #FFB48C"
 [end]
 
 [_line]
@@ -75,7 +75,7 @@ UseOrientation=N
 LineWidth=4
 BorderWidth=1
 Xpm="0 0 2 0"
-"a c #EB7A7A"
+"a c #FF7A7A"
 "b c #646464"
 FontStyle=NoLabel
 [end]
@@ -120,9 +120,9 @@ FontStyle=NoLabel
 Type=0x07
 String=道路（3m未満）
 UseOrientation=N
-LineWidth=2
+LineWidth=1
 Xpm="0 0 1 0"
-"a c #8C8C8C"
+"a c #646464"
 FontStyle=NoLabel
 [end]
 
@@ -140,11 +140,37 @@ FontStyle=NoLabel
 
 [_line]
 Type=0x14
-String=鉄道
+String=JR
+UseOrientation=Y
+Xpm="32 4 2 1"
+"# c #646464"
+". c #FFFFFF"
+"################################"
+"########........########........"
+"########........########........"
+"################################"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x10e04
+String=鉄道（JR以外）
 UseOrientation=N
 LineWidth=3
 Xpm="0 0 1 0"
 "a c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x10e05
+String=鉄道（トンネル）
+UseOrientation=Y
+Xpm="32 2 2 1"
+"# c #646464"
+". c none"
+"######....######....######....##"
+"######....######....######....##"
 FontStyle=NoLabel
 [end]
 
@@ -311,7 +337,7 @@ DayXpm="1 1 1 1"
 ". c none"
 "."
 FontStyle=NormalFont
-DayCustomColor=#000000
+DayCustomColor=#136145
 [end]
 
 [_point]
@@ -321,7 +347,7 @@ DayXpm="1 1 1 1"
 ". c none"
 "."
 FontStyle=SmallFont
-DayCustomColor=#000000
+DayCustomColor=#136145
 [end]
 
 [_point]
@@ -331,7 +357,7 @@ DayXpm="1 1 1 1"
 ". c none"
 "."
 FontStyle=SmallFont
-DayCustomColor=#000000
+DayCustomColor=#136145
 [end]
 
 [_point]
