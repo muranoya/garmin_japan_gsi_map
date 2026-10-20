@@ -35,8 +35,12 @@
 | `landforml` / `landformp` | Line / Point | 崖・岩などの地形表現 |
 | `structurel` / `boundary` | Line | 送電線・構造物 / 行政界 |
 
-- タイル境界で地物がクリップされているため、**線は端点で結合、面は union して再構成する**必要がある
-- レイヤごとに収録ズームが異なる場合がある（例: 等高線は z14 にも存在）。どのズームから何を取るかは実データで確認して決める
+- 各タイルは **80px のバッファ**付きで、隣接タイルと地物が重複している
+- 隣接タイル間で境界付近の形状がわずかに異なる（タイルごとに簡略化されているとみられる）。境界で切った端点が数 px〜数十 px ずれることがある
+- z14〜z16 のいずれも 25000 レベルのデータを含む。既定では最も詳細な z16 を使う
+- 地物コード（`ftCode`、注記の `annoCtg`）の意味は、地理院のスタイル定義
+  `https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/std.json` の各レイヤの `metadata.path` から分かる
+- 同じ地物に複数の注記が付くことがある（例: 滝に `annoCtg` 323 と 822 の両方）
 
 ### DEM（補助）
 
@@ -53,11 +57,20 @@
   → mkgmap（+ style + TYP）で gmapsupp.img を生成
 ```
 
-- `.img` の書き出しは自前実装せず **mkgmap に任せる**（Java。jar は自動取得する想定）
-- 見た目は mkgmap のスタイルファイルと TYP ファイルで調整する。コード変更なしで試行錯誤できる形を保つ
-- CLI イメージ（予定）:
+- `.img` の書き出しは自前実装せず **mkgmap に任せる**（Java。jar は初回に `~/.cache/gsi2garmin/` へ自動取得）
+- **Rust 側は幾何処理だけを行い、属性の意味は解釈しない。** レイヤ名を `gsi_layer` タグに入れ、
+  地理院の属性（`ftCode`, `alti`, `knj` など）をそのまま OSM タグとして出力する。
+  Garmin の種別への対応付けはすべて mkgmap スタイル（`style/gsi/`）で行う
+- 見た目は mkgmap のスタイルファイルと TYP ファイルで調整する。`build --style <dir>` でコード変更なしに試行錯誤できる
+- 幾何処理（`src/geom.rs`）:
+  - 線: 各タイルの範囲ちょうどで切り直し、タイル境界上の端点どうしを結合する。
+    1 段階目は一致する端点（3 つ以上集まる点は分岐とみなして結合しない）、2 段階目は許容距離内の相互最近傍
+  - 面: タイル範囲で切り取るだけ（結合はしない）
+  - 点: タイル範囲内（半開区間）のものだけを採用し、バッファによる重複を除く
+- 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`
+- CLI:
   - `gsi2garmin fetch --bbox <minlon,minlat,maxlon,maxlat> -o area.mbtiles`
-  - `gsi2garmin build <tiles_dir|area.mbtiles> -o gmapsupp.img`
+  - `gsi2garmin build <tiles_dir|area.mbtiles> -o area.img [--work-dir <dir>] [--style <dir>] [--code-page 932]`
 
 ## 技術スタック
 
