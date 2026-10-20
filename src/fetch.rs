@@ -9,8 +9,49 @@ use reqwest::{Client, StatusCode, header};
 use std::path::PathBuf;
 use std::time::Duration;
 
-pub const DEFAULT_URL: &str =
-    "https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/{z}/{x}/{y}.pbf";
+/// 取得するデータの種類。URL・既定ズーム・MBTiles のメタデータを決める。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Dataset {
+    /// 地理院地図Vector（ベクタタイル, 最大 z16）
+    Vector,
+    /// 標高タイル DEM10B（全国, PNG, 最大 z14）。陰影起伏用
+    Dem,
+    /// 標高タイル DEM5A（航空レーザ測量の範囲のみ, PNG, 最大 z15）
+    Dem5a,
+}
+
+impl Dataset {
+    pub fn url(self) -> &'static str {
+        match self {
+            Self::Vector => "https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/{z}/{x}/{y}.pbf",
+            Self::Dem => "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",
+            Self::Dem5a => "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",
+        }
+    }
+
+    pub fn max_zoom(self) -> u8 {
+        match self {
+            Self::Vector => 16,
+            Self::Dem => 14,
+            Self::Dem5a => 15,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Vector => "地理院地図Vector",
+            Self::Dem => "地理院 標高タイル DEM10B",
+            Self::Dem5a => "地理院 標高タイル DEM5A",
+        }
+    }
+
+    pub fn format(self) -> &'static str {
+        match self {
+            Self::Vector => "pbf",
+            Self::Dem | Self::Dem5a => "png",
+        }
+    }
+}
 
 /// 何タイルごとにコミットするか。中断時に失うのは最大でこの件数分。
 const COMMIT_EVERY: usize = 200;
@@ -22,6 +63,7 @@ pub struct FetchOptions {
     pub output: PathBuf,
     pub url_template: String,
     pub concurrency: usize,
+    pub dataset: Dataset,
 }
 
 enum Outcome {
@@ -45,7 +87,7 @@ pub async fn run(opts: FetchOptions) -> Result<()> {
         );
     }
     if targets.is_empty() {
-        db.update_metadata(&opts.bbox, &opts.url_template)?;
+        db.update_metadata(&opts.bbox, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
         eprintln!("すべて取得済みです");
         return Ok(());
     }
@@ -113,7 +155,7 @@ pub async fn run(opts: FetchOptions) -> Result<()> {
         pb.inc(1);
     }
     db.commit()?;
-    db.update_metadata(&opts.bbox, &opts.url_template)?;
+    db.update_metadata(&opts.bbox, opts.dataset.name(), opts.dataset.format(), &opts.url_template)?;
     pb.finish_and_clear();
 
     eprintln!("保存 {saved} / データなし(404) {missing} / 失敗 {failed}");
@@ -180,7 +222,7 @@ mod tests {
     fn urlテンプレートの展開() {
         let t = TileCoord { z: 16, x: 58089, y: 25777 };
         assert_eq!(
-            expand_url(DEFAULT_URL, t),
+            expand_url(Dataset::Vector.url(), t),
             "https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/16/58089/25777.pbf"
         );
     }

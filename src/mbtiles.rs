@@ -86,7 +86,7 @@ impl MbTiles {
     }
 
     /// 取得範囲とズームに合わせてメタデータを更新する。
-    pub fn update_metadata(&self, bbox: &BBox, source_url: &str) -> Result<()> {
+    pub fn update_metadata(&self, bbox: &BBox, name: &str, format: &str, source_url: &str) -> Result<()> {
         let bounds = match self.metadata("bounds")? {
             Some(s) => s.parse::<BBox>().map_or(*bbox, |old| old.union(bbox)),
             None => *bbox,
@@ -100,8 +100,8 @@ impl MbTiles {
         let center_lat = (bounds.min_lat + bounds.max_lat) / 2.0;
 
         let mut entries = vec![
-            ("name", "地理院地図Vector".to_string()),
-            ("format", "pbf".to_string()),
+            ("name", name.to_string()),
+            ("format", format.to_string()),
             ("type", "baselayer".to_string()),
             ("attribution", "国土地理院".to_string()),
             ("source", source_url.to_string()),
@@ -170,8 +170,8 @@ mod tests {
     #[test]
     fn メタデータのboundsは既存範囲と合成する() -> Result<()> {
         let db = MbTiles::open(Path::new(":memory:"))?;
-        db.update_metadata(&"139,35.7,139.1,35.8".parse()?, "u")?;
-        db.update_metadata(&"139.05,35.6,139.2,35.75".parse()?, "u")?;
+        db.update_metadata(&"139,35.7,139.1,35.8".parse()?, "n", "pbf", "u")?;
+        db.update_metadata(&"139.05,35.6,139.2,35.75".parse()?, "n", "pbf", "u")?;
         assert_eq!(db.metadata("bounds")?.as_deref(), Some("139,35.6,139.2,35.8"));
         Ok(())
     }

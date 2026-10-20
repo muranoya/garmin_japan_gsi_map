@@ -28,8 +28,11 @@ enum Command {
         /// 取得範囲 minlon,minlat,maxlon,maxlat（例: 奥多摩 138.95,35.70,139.25,35.90）
         #[arg(long, allow_hyphen_values = true)]
         bbox: BBox,
-        /// 取得するズームレベル（カンマ区切りで複数指定可。最大 16）
-        #[arg(long, value_delimiter = ',', default_value = "16")]
+        /// 取得するデータの種類
+        #[arg(long, value_enum, default_value_t = fetch::Dataset::Vector)]
+        source: fetch::Dataset,
+        /// 取得するズームレベル（カンマ区切りで複数指定可。省略時はデータの最大ズーム）
+        #[arg(long, value_delimiter = ',')]
         zoom: Vec<u8>,
         /// 保存先の MBTiles ファイル（既存なら追記）
         #[arg(short, long)]
@@ -37,9 +40,9 @@ enum Command {
         /// 同時リクエスト数（地理院サーバへの負荷を考えて小さめに）
         #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u16).range(1..=16))]
         concurrency: u16,
-        /// タイル URL テンプレート
-        #[arg(long, default_value = fetch::DEFAULT_URL)]
-        url: String,
+        /// タイル URL テンプレート（省略時は --source に応じた地理院の URL）
+        #[arg(long)]
+        url: Option<String>,
     },
     /// タイル（MBTiles またはフォルダ）から Garmin 用の .img を作る
     Build {
@@ -78,14 +81,17 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Fetch { bbox, zoom, output, concurrency, url } => {
-            ensure!(zoom.iter().all(|&z| z <= 16), "ズームレベルは 0〜16 で指定してください");
+        Command::Fetch { bbox, source, zoom, output, concurrency, url } => {
+            let max = source.max_zoom();
+            let zooms = if zoom.is_empty() { vec![max] } else { zoom };
+            ensure!(zooms.iter().all(|&z| z <= max), "ズームレベルは 0〜{max} で指定してください");
             fetch::run(fetch::FetchOptions {
                 bbox,
-                zooms: zoom,
+                zooms,
                 output,
-                url_template: url,
+                url_template: url.unwrap_or_else(|| source.url().to_string()),
                 concurrency: concurrency.into(),
+                dataset: source,
             })
             .await
         }
