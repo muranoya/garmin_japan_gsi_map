@@ -7,13 +7,19 @@
 area := "okutama"
 # 範囲 minlon,minlat,maxlon,maxlat
 bbox := "138.92,35.45,140.15,35.92"
-# 取得データと生成物の置き場所
+# データの置き場所
+#   data/tiles/   取得したタイル（MBTiles）。再取得せずに使い回す
+#   data/work/    処理中の一時ファイル。just img の開始時に作り直す（just clean で削除）
+#   data/output/  最終成果物（.img）
 data_dir := "data"
+tiles_dir := data_dir / "tiles"
+work_dir := data_dir / "work" / area
+output_dir := data_dir / "output"
 
 bin := "target/release/gsi2garmin"
-tiles := data_dir / area + ".mbtiles"
-dem := data_dir / area + "-dem.mbtiles"
-img_file := data_dir / area + ".img"
+tiles := tiles_dir / area + ".mbtiles"
+dem := tiles_dir / area + "-dem.mbtiles"
+img_file := output_dir / area + ".img"
 
 # タスク一覧を表示する
 default:
@@ -28,17 +34,23 @@ fetch: fetch-vector fetch-dem
 
 # ベクタタイル（地理院地図Vector）を取得する
 fetch-vector: build
-    mkdir -p {{data_dir}}
+    mkdir -p {{tiles_dir}}
     {{bin}} fetch --bbox {{bbox}} -o {{tiles}}
 
 # 標高タイル（陰影起伏用）を取得する
 fetch-dem: build
-    mkdir -p {{data_dir}}
+    mkdir -p {{tiles_dir}}
     {{bin}} fetch --source dem --bbox {{bbox}} -o {{dem}}
 
 # 取得済みのタイルから .img を作る（追加の build オプションを渡せる。例: just img --code-page 932）
 img *args: build
-    {{bin}} build {{tiles}} --dem {{dem}} -o {{img_file}} {{args}}
+    rm -rf {{work_dir}}
+    mkdir -p {{work_dir}} {{output_dir}}
+    {{bin}} build {{tiles}} --dem {{dem}} -o {{img_file}} --work-dir {{work_dir}} {{args}}
 
 # 取得から .img 作成までまとめて行う
 all: fetch img
+
+# 処理中の一時ファイル（data/work）を削除する
+clean:
+    rm -rf {{data_dir}}/work

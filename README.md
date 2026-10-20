@@ -36,7 +36,7 @@
 just all
 ```
 
-既定では奥多摩の範囲のタイルを `data/` に取得し、`data/okutama.img` を作ります。
+既定では奥多摩の範囲のタイルを取得し、`data/output/okutama.img` を作ります。
 別の範囲を作るときは、エリア名と範囲（`最小経度,最小緯度,最大経度,最大緯度`）を指定します。
 
 ```sh
@@ -51,6 +51,15 @@ just area=tanzawa bbox=139.05,35.40,139.30,35.55 all
 | `just fetch` | ベクタタイルと標高タイルを取得（中断しても再実行で続きから取得） |
 | `just img` | 取得済みのタイルから `.img` を作成 |
 | `just img <オプション>` | `build` に追加のオプションを渡す（例: `just img --code-page 932`） |
+| `just clean` | 処理中の一時ファイル（`data/work/`）を削除 |
+
+ファイルは `data/` の下に種類ごとに保存されます。
+
+| フォルダ | 内容 |
+|---|---|
+| `data/tiles/` | 取得したタイル（MBTiles）。再取得せずに使い回します |
+| `data/work/<エリア名>/` | 処理中の一時ファイル（OSM・HGT など）。`just img` の開始時に作り直します。範囲が広いと数 GB〜十数 GB になります |
+| `data/output/` | 最終成果物の `.img` |
 
 ### 端末に入れる
 
@@ -71,9 +80,9 @@ just area=tanzawa bbox=139.05,35.40,139.30,35.55 all
 ### コマンドを直接使う
 
 ```sh
-gsi2garmin fetch --bbox 138.95,35.70,139.25,35.90 -o data/okutama.mbtiles
-gsi2garmin fetch --source dem --bbox 138.95,35.70,139.25,35.90 -o data/okutama-dem.mbtiles
-gsi2garmin build data/okutama.mbtiles --dem data/okutama-dem.mbtiles -o data/okutama.img
+gsi2garmin fetch --bbox 138.95,35.70,139.25,35.90 -o data/tiles/okutama.mbtiles
+gsi2garmin fetch --source dem --bbox 138.95,35.70,139.25,35.90 -o data/tiles/okutama-dem.mbtiles
+gsi2garmin build data/tiles/okutama.mbtiles --dem data/tiles/okutama-dem.mbtiles -o data/output/okutama.img
 ```
 
 すべてのオプションは `gsi2garmin fetch --help` / `gsi2garmin build --help` で確認できます。
