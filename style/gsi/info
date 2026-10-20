@@ -1,0 +1,7 @@
+# 地理院地図Vector（experimental_bvmap）用の mkgmap スタイル
+#
+# gsi2garmin は地理院ベクタタイルの属性をそのまま OSM のタグとして出力し、
+# レイヤ名を gsi_layer タグに入れる。Garmin の種別への対応付けはすべてこのスタイルで行う。
+# 地物コード（ftCode / annoCtg）の意味は地理院地図Vector の std.json の metadata.path を参照。
+version 1
+description 地理院地図Vector

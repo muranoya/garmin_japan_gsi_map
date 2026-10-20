@@ -1,5 +1,11 @@
+mod build;
 mod fetch;
+mod geom;
 mod mbtiles;
+mod mkgmap;
+mod mvt;
+mod osm;
+mod source;
 mod tile;
 
 use anyhow::{Result, ensure};
@@ -35,6 +41,38 @@ enum Command {
         #[arg(long, default_value = fetch::DEFAULT_URL)]
         url: String,
     },
+    /// タイル（MBTiles またはフォルダ）から Garmin 用の .img を作る
+    Build {
+        /// 入力: MBTiles ファイル、または {z}/{x}/{y}.pbf 形式のフォルダ
+        input: PathBuf,
+        /// 出力する .img ファイル（端末の /Garmin フォルダに置く）
+        #[arg(short, long)]
+        output: PathBuf,
+        /// 使うズームレベル（省略時は入力の最大ズーム）
+        #[arg(long)]
+        zoom: Option<u8>,
+        /// mkgmap のスタイルフォルダ（省略時は同梱の style/gsi）
+        #[arg(long)]
+        style: Option<PathBuf>,
+        /// mkgmap.jar のパス（省略時は自動でダウンロードしてキャッシュする）
+        #[arg(long)]
+        mkgmap: Option<PathBuf>,
+        /// 中間ファイルを残すフォルダ（省略時は一時フォルダを使って削除する）
+        #[arg(long)]
+        work_dir: Option<PathBuf>,
+        /// 端末の地図一覧に表示する名前
+        #[arg(long, default_value = "地理院地図Vector")]
+        name: String,
+        /// 地図の説明（省略時は入力ファイル名）
+        #[arg(long)]
+        description: Option<String>,
+        /// 文字コード。65001 = UTF-8、日本語が表示できない場合は 932（Shift_JIS）を試す
+        #[arg(long, default_value_t = 65001)]
+        code_page: u16,
+        /// Garmin のファミリー ID。他の地図と重ならない値にする
+        #[arg(long, default_value_t = 7251)]
+        family_id: u16,
+    },
 }
 
 #[tokio::main]
@@ -48,6 +86,32 @@ async fn main() -> Result<()> {
                 output,
                 url_template: url,
                 concurrency: concurrency.into(),
+            })
+            .await
+        }
+        Command::Build {
+            input,
+            output,
+            zoom,
+            style,
+            mkgmap,
+            work_dir,
+            name,
+            description,
+            code_page,
+            family_id,
+        } => {
+            let description = description.unwrap_or_else(|| {
+                input.file_stem().map_or(name.clone(), |s| s.to_string_lossy().into_owned())
+            });
+            build::run(build::BuildOptions {
+                input,
+                output,
+                zoom,
+                style,
+                mkgmap,
+                work_dir,
+                map: mkgmap::MapInfo { family_id, name, description, code_page },
             })
             .await
         }

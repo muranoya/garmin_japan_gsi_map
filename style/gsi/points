@@ -1,0 +1,24 @@
+# ---- 注記（label レイヤ, ftCode 100）----
+# annoCtg の意味は std.json の「注記-*」を参照
+# 311-316 山名 / 810 山
+gsi_layer=label & annoCtg ~ '31[1-6]|810' { name '${knj}' } [0x6616 resolution 21]
+# 832 峠
+gsi_layer=label & annoCtg=832 { name '${knj}' } [0x660b resolution 22]
+# 822 滝
+gsi_layer=label & annoCtg=822 { name '${knj}' } [0x6508 resolution 22]
+# 321 湖・沼・池 / 820 湖沼
+gsi_layer=label & annoCtg ~ '321|820' { name '${knj}' } [0x650d resolution 21]
+# 110 市区町村
+gsi_layer=label & annoCtg=110 { name '${knj}' } [0x0800 resolution 18]
+# 210 町字名 / 220 集落名称 / 800 居住地名
+gsi_layer=label & annoCtg ~ '210|220|800' { name '${knj}' } [0x0b00 resolution 22]
+# 422 鉄道駅名
+gsi_layer=label & annoCtg=422 { name '${knj}' } [0x2f08 resolution 22]
+# 661 神社 / 662 寺院
+gsi_layer=label & annoCtg ~ '66[12]' { name '${knj}' } [0x2c0b resolution 23]
+# その他の注記は文字だけのラベルとして載せる
+gsi_layer=label & knj=* { name '${knj}' } [0x2800 resolution 23]
+
+# ---- 標高点 ----
+# 7201 標高点
+gsi_layer=elevation & ftCode=7201 { name '${alti}' } [0x2800 resolution 23]

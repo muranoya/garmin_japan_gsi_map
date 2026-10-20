@@ -1,0 +1,4 @@
+# 5000 水域
+gsi_layer=waterarea & ftCode=5000 [0x3c resolution 20]
+# 3101 普通建物 / 3102 堅ろう建物 / 3103 高層建物 / 3111,3112 無壁舎
+gsi_layer=building [0x13 resolution 23]
