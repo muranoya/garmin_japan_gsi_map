@@ -371,7 +371,7 @@ DayCustomColor=#000000
 [end]
 
 [_point]
-Type=0x2801
+Type=0x661e
 String=標高点
 DayXpm="3 3 2 1"
 "# c #000000"
@@ -384,7 +384,7 @@ DayCustomColor=#000000
 [end]
 
 [_point]
-Type=0x2802
+Type=0x661f
 String=三角点
 DayXpm="9 8 2 1"
 "# c #000000"
