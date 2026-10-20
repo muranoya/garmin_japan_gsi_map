@@ -95,8 +95,11 @@ point('0x660b', '峠', label=('SmallFont', '#000000'))
 point('0x6508', '滝', label=('SmallFont', '#000000'))
 point('0x650d', '水部の名称', label=('SmallFont', WATER))
 point('0x0800', '市区町村', label=('LargeFont', '#000000'))
-point('0x0b00', '居住地名', label=('NormalFont', '#000000'))
+point('0x0b00', '町字名', label=('NormalFont', '#000000'))
+point('0x0c00', '集落名', label=('SmallFont', '#505050'))
 point('0x2f08', '駅', label=('NormalFont', '#000000'))
+point('0x2f09', '鉄道路線名', label=('SmallFont', '#000000'))
+point('0x2f0a', '道路名・道路施設', label=('SmallFont', '#000000'))
 point('0x2800', '注記', label=('SmallFont', '#000000'))
 
 # ---- 地図記号 ----

@@ -286,12 +286,22 @@ DayCustomColor=#000000
 
 [_point]
 Type=0x0b00
-String=居住地名
+String=町字名
 DayXpm="1 1 1 1"
 ". c none"
 "."
 FontStyle=NormalFont
 DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x0c00
+String=集落名
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#505050
 [end]
 
 [_point]
@@ -301,6 +311,26 @@ DayXpm="1 1 1 1"
 ". c none"
 "."
 FontStyle=NormalFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2f09
+String=鉄道路線名
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2f0a
+String=道路名・道路施設
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
 DayCustomColor=#000000
 [end]
 

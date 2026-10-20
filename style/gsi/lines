@@ -1,3 +1,7 @@
+# 表示する解像度は地理院地図（ラスタの標準地図）を参考にしている。
+# 解像度 r はおおよそ Web 地図のズーム r-8 に当たる（24 ≒ z16, 20 ≒ z12, 18 ≒ z10）。
+# 端末の画面は小さいので、地理院地図より 1 段ほど遅らせて表示するものもある。
+
 # ---- 等高線 ----
 # ftCode 7351 通常部 / 7352 数値部 / 7353 崖部。等深線（737x）は扱わない。
 # 標高は Garmin の慣例に従いフィートで名前に入れる（端末側で設定単位に換算表示される）。
@@ -16,22 +20,24 @@ gsi_layer=contour & ftCode ~ '735[123]'
 # 中心線（ftCode 27xx）だけを使う。22xx・24xx は真幅道路の道路縁で、地理院地図でも z17 以上でしか
 # 描かない。中心線と重なって市街地が灰色の線で埋まるので捨てる。
 # ftCode 2721-2723 徒歩道 / 2731-2734 石段 / 2711,2713,2714 庭園路
-# rdCtg 0 国道 / 1 都道府県道 / 2,5,6 市区町村道・その他
+# rdCtg 0 国道 / 1 都道府県道 / 2,5,6 市区町村道・その他 / 3 高速自動車国道等
 # rnkWidth 0 3m未満 / 1 3-5.5m / 2 5.5-13m / 3 13-19.5m / 4 19.5m以上
+# ズームアウトしたときは高速道路・国道・都道府県道と幅の広い道路だけを残す。
 gsi_layer=road & !(ftCode ~ '27[0-9][0-9]') { deletealltags }
-gsi_layer=road & ftCode ~ '272[123]|273[1-4]' [0x16 resolution 22]
-gsi_layer=road & motorway=1 [0x01 resolution 18]
-gsi_layer=road & ftCode ~ '271[134]' [0x07 resolution 23]
+gsi_layer=road & ftCode ~ '272[1-4]|273[1-4]' [0x16 resolution 22]
+gsi_layer=road & ftCode ~ '271[134]' [0x07 resolution 24]
+gsi_layer=road & (motorway=1 | rdCtg=3) [0x01 resolution 18]
 gsi_layer=road & rdCtg=0 [0x02 resolution 18]
-gsi_layer=road & rdCtg=1 [0x03 resolution 19]
-gsi_layer=road & rnkWidth ~ '[2-9]' [0x05 resolution 20]
-gsi_layer=road & rnkWidth=1 [0x06 resolution 21]
-gsi_layer=road [0x07 resolution 22]
+gsi_layer=road & rdCtg=1 [0x03 resolution 20]
+gsi_layer=road & rnkWidth ~ '[34]' [0x05 resolution 21]
+gsi_layer=road & rnkWidth=2 [0x05 resolution 22]
+gsi_layer=road & rnkWidth=1 [0x06 resolution 22]
+gsi_layer=road [0x07 resolution 23]
 
 # ---- 鉄道 ----
 # 中心線（ftCode 8201）だけを使う。28xx は真幅の鉄道（z17 以上用）なので捨てる。
 gsi_layer=railway & ftCode!=8201 { deletealltags }
-gsi_layer=railway [0x14 resolution 21]
+gsi_layer=railway [0x14 resolution 18]
 
 # ---- 河川 ----
 # 5201,5301 通常部 / 5203 堤防等に接する部分 / 5302 枯れ川部 / 5321 人工水路（空間）/ 5322 人工水路（地下）
@@ -43,7 +49,7 @@ gsi_layer=river & ftCode=5321 [0x18 resolution 23]
 # 1211 都府県界 / 1212 市区町村界 / 8202 送電線
 gsi_layer=boundary & ftCode=1211 [0x1d resolution 19]
 gsi_layer=boundary & ftCode=1212 [0x1c resolution 21]
-gsi_layer=structurel & ftCode=8202 [0x29 resolution 22]
+gsi_layer=structurel & ftCode=8202 [0x29 resolution 23]
 
 # ---- 地形表現（landforml）----
 # 7501,7502,7509,7511,7512,7541 岩・崖等 / 7521 雨裂（上部）/ 5521 滝（線）

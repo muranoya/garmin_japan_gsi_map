@@ -1,26 +1,44 @@
 # 注記はすべて文字だけで表示する（TYP でアイコンを透明にしている）。
 # 種別を分けているのは、文字の大きさ・色の違いと端末の検索で分類するため。
+# 表示する解像度は地理院地図（ラスタの標準地図）を参考にしている（lines の冒頭を参照）。
+# ズームアウトしたときは市区町村名・駅名・主な山名だけが残るようにしている。
 
 # ---- 注記（label レイヤ, ftCode 100）----
 # annoCtg の意味は std.json の「注記-*」を参照。
-# 同じ滝に 323（沢・滝等）と 822（滝）の両方の注記が付くため、323 の滝は捨てる
-gsi_layer=label & annoCtg=323 & knj ~ '.*滝' { deletealltags }
-# 311-316 山名 / 810 山
-gsi_layer=label & annoCtg ~ '31[1-6]|810' { name '${knj}' } [0x6616 resolution 21]
-# 832 峠
-gsi_layer=label & annoCtg=832 { name '${knj}' } [0x660b resolution 22]
-# 822 滝
-gsi_layer=label & annoCtg=822 { name '${knj}' } [0x6508 resolution 22]
-# 321 湖・沼・池 / 820 湖沼 / 322 河川・用水
-gsi_layer=label & annoCtg ~ '32[12]|820' { name '${knj}' } [0x650d resolution 22]
-# 110 市区町村
+# 8xx は 2500 レベルの地名情報で、地理院地図でも z17 以上でしか表示しない。
+# 郵便局・学校・交番などの施設名が大量にあるうえ、800（居住地名）/ 810（山）/ 822（滝）/ 832（峠）は
+# 210 / 312 / 323 / 332 と同じ地名の重複なので、すべて捨てる。
+gsi_layer=label & annoCtg ~ '8[0-9][0-9]' { deletealltags }
+# 110 市区町村 / 120 飛び地 / 130 郡
 gsi_layer=label & annoCtg=110 { name '${knj}' } [0x0800 resolution 18]
-# 210 町字名 / 220 集落名称 / 800 居住地名
-gsi_layer=label & annoCtg ~ '210|220|800' { name '${knj}' } [0x0b00 resolution 22]
-# 422 鉄道駅名
-gsi_layer=label & annoCtg=422 { name '${knj}' } [0x2f08 resolution 22]
-# その他の注記
-gsi_layer=label & knj=* { name '${knj}' } [0x2800 resolution 23]
+gsi_layer=label & annoCtg ~ '1[23]0' { name '${knj}' } [0x0800 resolution 21]
+# 422 鉄道駅名 / 421 鉄道路線名
+gsi_layer=label & annoCtg=422 { name '${knj}' } [0x2f08 resolution 20]
+gsi_layer=label & annoCtg=421 { name '${knj}' } [0x2f09 resolution 21]
+# 311,314-316 主な山名 / 312 山、岳、峰等 / 313 尖峰、丘、塚等
+gsi_layer=label & annoCtg ~ '31[1456]' { name '${knj}' } [0x6616 resolution 20]
+gsi_layer=label & annoCtg=312 { name '${knj}' } [0x6616 resolution 21]
+gsi_layer=label & annoCtg=313 { name '${knj}' } [0x6616 resolution 22]
+# 323 沢、瀬、淵、谷、滝等。滝は種別を分ける
+gsi_layer=label & annoCtg=323 & knj ~ '.*滝' { name '${knj}' } [0x6508 resolution 22]
+# 321 湖、沼、池 / 322 河川、用水 / 323 沢、谷等
+gsi_layer=label & annoCtg ~ '32[12]' { name '${knj}' } [0x650d resolution 21]
+gsi_layer=label & annoCtg=323 { name '${knj}' } [0x650d resolution 22]
+# 332 岩、崖、鍾乳洞、温泉、峠、坂等（峠は種別を分ける）
+gsi_layer=label & annoCtg=332 & knj ~ '.*峠' { name '${knj}' } [0x660b resolution 22]
+gsi_layer=label & annoCtg=332 { name '${knj}' } [0x660b resolution 23]
+# 331 高原、原、森、平等 / 333 山脈、山地 / 334 平野、盆地 / 34x 海・岬 / 35x 島
+gsi_layer=label & annoCtg ~ '33[134]|3[45][0-9]' { name '${knj}' } [0x2800 resolution 21]
+# 210 町字名 / 220 集落名称
+gsi_layer=label & annoCtg=210 { name '${knj}' } [0x0b00 resolution 22]
+gsi_layer=label & annoCtg=220 { name '${knj}' } [0x0c00 resolution 22]
+# 411 道路名 / 412 道路施設（IC、道の駅等）/ 413 道路構造物（橋、トンネル）/ 423 鉄道構造物
+gsi_layer=label & annoCtg ~ '41[12]' { name '${knj}' } [0x2f0a resolution 22]
+gsi_layer=label & annoCtg ~ '413|423' { name '${knj}' } [0x2f0a resolution 24]
+# 521 ダム
+gsi_layer=label & annoCtg=521 { name '${knj}' } [0x650d resolution 22]
+# その他の注記（施設・公園・大学など）。拡大したときだけ表示する
+gsi_layer=label & knj=* { name '${knj}' } [0x2800 resolution 24]
 
 # ---- 標高点（elevation レイヤ）----
 # 7201 標高点
