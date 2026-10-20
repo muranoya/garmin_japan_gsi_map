@@ -1,0 +1,13 @@
+[package]
+name = "gsi2garmin"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+indicatif = "0.18"
+reqwest = "0.13"
+rusqlite = { version = "0.40", features = ["bundled"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal"] }
