@@ -23,6 +23,7 @@ pub struct BuildOptions {
     pub style: Option<PathBuf>,
     pub mkgmap: Option<PathBuf>,
     pub work_dir: Option<PathBuf>,
+    pub typ: Option<PathBuf>,
     pub map: MapInfo,
 }
 
@@ -67,8 +68,17 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
             d
         }
     };
+    let typ = match &opts.typ {
+        Some(p) => p.clone(),
+        None => {
+            let p = work.join("gsi.typ.txt");
+            mkgmap::write_bundled_typ(&p)?;
+            p
+        }
+    };
+
     let started = Instant::now();
-    let img = mkgmap::run(&jar, &style_dir, &osm_path, &work.join("out"), &opts.map)?;
+    let img = mkgmap::run(&jar, &style_dir, &[osm_path, typ], &work.join("out"), &opts.map)?;
     eprintln!("mkgmap: {:.1?}", started.elapsed());
 
     std::fs::copy(&img, &opts.output)

@@ -16,6 +16,14 @@ const STYLE_FILES: &[(&str, &str)] = &[
     ("points", include_str!("../style/gsi/points")),
 ];
 
+/// リポジトリ同梱の TYP ファイル（テキスト形式。mkgmap がコンパイルする）。
+const TYP: &str = include_str!("../style/gsi.typ.txt");
+
+pub fn write_bundled_typ(path: &Path) -> Result<()> {
+    std::fs::write(path, TYP)?;
+    Ok(())
+}
+
 pub fn write_bundled_style(dir: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     for (name, body) in STYLE_FILES {
@@ -67,7 +75,14 @@ pub struct MapInfo {
 }
 
 /// mkgmap を実行して gmapsupp.img を作る。生成したファイルのパスを返す。
-pub fn run(jar: &Path, style_dir: &Path, input: &Path, out_dir: &Path, info: &MapInfo) -> Result<PathBuf> {
+/// `inputs` には OSM ファイルと TYP のテキストファイルを渡す。
+pub fn run(
+    jar: &Path,
+    style_dir: &Path,
+    inputs: &[PathBuf],
+    out_dir: &Path,
+    info: &MapInfo,
+) -> Result<PathBuf> {
     std::fs::create_dir_all(out_dir)?;
     let mut cmd = Command::new("java");
     cmd.arg("-jar")
@@ -83,7 +98,7 @@ pub fn run(jar: &Path, style_dir: &Path, input: &Path, out_dir: &Path, info: &Ma
         .arg(format!("--area-name={}", info.description))
         .arg(format!("--description={}", info.description))
         .arg("--gmapsupp")
-        .arg(input);
+        .args(inputs);
     eprintln!("mkgmap を実行します");
     let status = cmd
         .status()

@@ -1,0 +1,540 @@
+; -*- coding: UTF-8 -*-
+; 地理院地図Vector 風の TYP 定義（mkgmap の TYP コンパイラ用テキスト形式）
+; tools/gen_typ.py で生成している。直接編集しないこと。
+; 色は地理院地図の std.json（ズーム16）に合わせている。FID/CodePage は mkgmap のオプションから設定される。
+
+[_drawOrder]
+Type=0x03c,1
+Type=0x013,2
+[end]
+
+[_polygon]
+Type=0x3c
+String=水域
+Xpm="0 0 1 0"
+"a c #BED2FF"
+[end]
+
+[_polygon]
+Type=0x13
+String=建物
+Xpm="0 0 1 0"
+"a c #FFD7AA"
+[end]
+
+[_line]
+Type=0x20
+String=補助曲線
+UseOrientation=Y
+Xpm="32 1 2 1"
+"# c #C8A03C"
+". c none"
+"##########################......"
+FontStyle=SmallFont
+DayCustomColor=#A07820
+[end]
+
+[_line]
+Type=0x21
+String=主曲線
+UseOrientation=N
+LineWidth=1
+Xpm="0 0 1 0"
+"a c #C8A03C"
+FontStyle=SmallFont
+DayCustomColor=#A07820
+[end]
+
+[_line]
+Type=0x22
+String=計曲線
+UseOrientation=N
+LineWidth=2
+Xpm="0 0 1 0"
+"a c #C8A03C"
+FontStyle=SmallFont
+DayCustomColor=#A07820
+[end]
+
+[_line]
+Type=0x01
+String=高速道路
+UseOrientation=N
+LineWidth=4
+BorderWidth=1
+Xpm="0 0 2 0"
+"a c #64C373"
+"b c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x02
+String=国道
+UseOrientation=N
+LineWidth=4
+BorderWidth=1
+Xpm="0 0 2 0"
+"a c #EB7A7A"
+"b c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x03
+String=都道府県道
+UseOrientation=N
+LineWidth=4
+BorderWidth=1
+Xpm="0 0 2 0"
+"a c #FFFF00"
+"b c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x05
+String=道路（5.5m以上）
+UseOrientation=N
+LineWidth=3
+BorderWidth=1
+Xpm="0 0 2 0"
+"a c #FFFFFF"
+"b c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x06
+String=道路（3m-5.5m）
+UseOrientation=N
+LineWidth=2
+BorderWidth=1
+Xpm="0 0 2 0"
+"a c #FFFFFF"
+"b c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x07
+String=道路（3m未満）
+UseOrientation=N
+LineWidth=2
+Xpm="0 0 1 0"
+"a c #8C8C8C"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x16
+String=徒歩道
+UseOrientation=Y
+Xpm="32 2 2 1"
+"# c #505050"
+". c none"
+"##########......##########......"
+"##########......##########......"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x14
+String=鉄道
+UseOrientation=N
+LineWidth=3
+Xpm="0 0 1 0"
+"a c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x18
+String=河川
+UseOrientation=N
+LineWidth=2
+Xpm="0 0 1 0"
+"a c #145AFF"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x26
+String=河川（枯れ川部）
+UseOrientation=Y
+Xpm="32 2 2 1"
+"# c #145AFF"
+". c none"
+"##########..##########..########"
+"##########..##########..########"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x1d
+String=都府県界
+UseOrientation=Y
+Xpm="32 2 2 1"
+"# c #440080"
+". c none"
+"##############..##.............."
+"##############..##.............."
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x1c
+String=市区町村界
+UseOrientation=Y
+Xpm="32 2 2 1"
+"# c #440080"
+". c none"
+"############..#..#..############"
+"############..#..#..############"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x29
+String=送電線
+UseOrientation=N
+LineWidth=1
+Xpm="0 0 1 0"
+"a c #646464"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x10e00
+String=岩・崖
+UseOrientation=N
+LineWidth=2
+Xpm="0 0 1 0"
+"a c #C8A03C"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x10e01
+String=雨裂
+UseOrientation=N
+LineWidth=3
+Xpm="0 0 1 0"
+"a c #C8A03C"
+FontStyle=NoLabel
+[end]
+
+[_line]
+Type=0x10e02
+String=滝
+UseOrientation=N
+LineWidth=3
+Xpm="0 0 1 0"
+"a c #646464"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x6616
+String=山名
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=NormalFont
+DayCustomColor=#511D0A
+[end]
+
+[_point]
+Type=0x660b
+String=峠
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x6508
+String=滝
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x650d
+String=水部の名称
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#145AFF
+[end]
+
+[_point]
+Type=0x0800
+String=市区町村
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=LargeFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x0b00
+String=居住地名
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=NormalFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2f08
+String=駅
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=NormalFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2800
+String=注記
+DayXpm="1 1 1 1"
+". c none"
+"."
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2801
+String=標高点
+DayXpm="3 3 2 1"
+"# c #000000"
+". c none"
+"###"
+"###"
+"###"
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2802
+String=三角点
+DayXpm="9 8 2 1"
+"# c #000000"
+". c none"
+"....#...."
+"...#.#..."
+"...#.#..."
+"..#...#.."
+"..#.#.#.."
+".#.....#."
+".#.....#."
+"#########"
+FontStyle=SmallFont
+DayCustomColor=#000000
+[end]
+
+[_point]
+Type=0x2803
+String=水準点
+DayXpm="7 7 2 1"
+"# c #000000"
+". c none"
+"#######"
+"#.....#"
+"#.....#"
+"#..#..#"
+"#.....#"
+"#.....#"
+"#######"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x2805
+String=神社
+DayXpm="11 9 2 1"
+"# c #000000"
+". c none"
+"###########"
+".#########."
+"...#...#..."
+"###########"
+"...#...#..."
+"...#...#..."
+"...#...#..."
+"...#...#..."
+"...#...#..."
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x2806
+String=寺院
+DayXpm="9 9 2 1"
+"# c #000000"
+". c none"
+"#...#####"
+"#...#...."
+"#...#...."
+"#...#...."
+"#########"
+"....#...#"
+"....#...#"
+"....#...#"
+"#####...#"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x2807
+String=温泉
+DayXpm="11 11 2 1"
+"# c #C80000"
+". c none"
+"..#..#..#.."
+".#..#..#..."
+"..#..#..#.."
+"...#..#..#."
+"..#..#..#.."
+"#.........#"
+"#.........#"
+"#.........#"
+".#.......#."
+"..#.....#.."
+"...#####..."
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x2808
+String=郵便局
+DayXpm="11 10 2 1"
+"# c #000000"
+". c none"
+"...#####..."
+"..#.....#.."
+".#.......#."
+"#.#######.#"
+"#.........#"
+"#.#######.#"
+"#....#....#"
+".#...#...#."
+"..#..#..#.."
+"...#####..."
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x2809
+String=病院
+DayXpm="9 9 2 1"
+"# c #000000"
+". c none"
+".#######."
+"#.......#"
+"#...#...#"
+"#...#...#"
+"#.#####.#"
+"#...#...#"
+"#...#...#"
+".#.....#."
+"..#####.."
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x280a
+String=学校
+DayXpm="9 9 2 1"
+"# c #000000"
+". c none"
+"....#...."
+"#########"
+".#.....#."
+"..#...#.."
+"...#.#..."
+"....#...."
+"...#.#..."
+"..#...#.."
+"##.....##"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x280b
+String=記念碑
+DayXpm="7 9 2 1"
+"# c #000000"
+". c none"
+"..###.."
+"..#.#.."
+"..#.#.."
+"..#.#.."
+"..#.#.."
+".#...#."
+".#...#."
+"#######"
+"#######"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x280c
+String=警察
+DayXpm="7 7 2 1"
+"# c #000000"
+". c none"
+"#.....#"
+".#...#."
+"..#.#.."
+"...#..."
+"..#.#.."
+".#...#."
+"#.....#"
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x280e
+String=役所・役場
+DayXpm="9 9 2 1"
+"# c #000000"
+". c none"
+"..#####.."
+".#.....#."
+"#.......#"
+"#.......#"
+"#.......#"
+"#.......#"
+"#.......#"
+".#.....#."
+"..#####.."
+FontStyle=NoLabel
+[end]
+
+[_point]
+Type=0x280f
+String=史跡・名勝
+DayXpm="9 5 2 1"
+"# c #000000"
+". c none"
+"...##...."
+"...##...."
+"........."
+"##....##."
+"##....##."
+FontStyle=NoLabel
+[end]
+

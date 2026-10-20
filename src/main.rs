@@ -63,6 +63,9 @@ enum Command {
         /// 中間ファイルを残すフォルダ（省略時は一時フォルダを使って削除する）
         #[arg(long)]
         work_dir: Option<PathBuf>,
+        /// TYP ファイル（テキスト形式。省略時は同梱の style/gsi.typ.txt）
+        #[arg(long)]
+        typ: Option<PathBuf>,
         /// 端末の地図一覧に表示する名前
         #[arg(long, default_value = "地理院地図Vector")]
         name: String,
@@ -102,6 +105,7 @@ async fn main() -> Result<()> {
             style,
             mkgmap,
             work_dir,
+            typ,
             name,
             description,
             code_page,
@@ -117,6 +121,7 @@ async fn main() -> Result<()> {
                 style,
                 mkgmap,
                 work_dir,
+                typ,
                 map: mkgmap::MapInfo { family_id, name, description, code_page },
             })
             .await
