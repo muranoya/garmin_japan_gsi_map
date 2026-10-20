@@ -36,28 +36,28 @@
 just all
 ```
 
-既定では奥多摩の範囲のタイルを取得し、`data/output/okutama.img` を作ります。
-別の範囲を作るときは、エリア名と範囲（`最小経度,最小緯度,最大経度,最大緯度`）を指定します。
+範囲・出力先・陰影起伏の有無などの設定は、すべて設定ファイル [`gsi2garmin.toml`](gsi2garmin.toml) に書きます。
+指定できる項目と既定値はこのファイルのコメントにまとめてあります。
+同梱の設定では奥多摩周辺のタイルを取得し、`data/output/okutama.img` を作ります。
+
+別の範囲の地図を作るときは、設定ファイルをコピーして `bbox` とファイルの保存先を書き換え、
+`config` で指定します。
 
 ```sh
-just area=tanzawa bbox=139.05,35.40,139.30,35.55 all
+cp gsi2garmin.toml tanzawa.toml   # bbox = [139.05, 35.40, 139.30, 35.55] などに書き換える
+just config=tanzawa.toml all
 ```
 
-陰影起伏を入れるときは `hillshade=true` を指定します（標高タイルも取得します）。
+陰影起伏（山肌の影）は `[hillshade]` の `enabled = true` で入ります（`fetch` で標高タイルも取得します）。
 端末での描画が重くなり、縮小時に山地が灰色っぽく見えるため、既定では入れていません。
-
-```sh
-just hillshade=true all
-```
 
 個別のタスクも実行できます（いずれもリリースビルドを使います）。
 
 | コマンド | 内容 |
 |---|---|
 | `just build` | リリースビルド |
-| `just fetch` | ベクタタイル（`hillshade=true` なら標高タイルも）を取得（中断しても再実行で続きから取得） |
+| `just fetch` | ベクタタイル（陰影起伏を入れる設定なら標高タイルも）を取得（中断しても再実行で続きから取得） |
 | `just img` | 取得済みのタイルから `.img` を作成 |
-| `just img <オプション>` | `build` に追加のオプションを渡す（例: `just img --code-page 932`） |
 | `just clean` | 処理中の一時ファイル（`data/work/`）を削除 |
 
 ファイルは `data/` の下に種類ごとに保存されます。
@@ -65,7 +65,7 @@ just hillshade=true all
 | フォルダ | 内容 |
 |---|---|
 | `data/tiles/` | 取得したタイル（MBTiles）。再取得せずに使い回します |
-| `data/work/<エリア名>/` | 処理中の一時ファイル（OSM・HGT など）。`just img` の開始時に作り直します。範囲が広いと数 GB〜十数 GB になります |
+| `data/work/<エリア名>/` | 処理中の一時ファイル（OSM・HGT など）。`.img` を作るたびに作り直します。範囲が広いと数 GB〜十数 GB になります |
 | `data/output/` | 最終成果物の `.img` |
 
 ### 端末に入れる
@@ -73,7 +73,7 @@ just hillshade=true all
 できた `.img` を、端末の本体メモリまたは microSD カードの `Garmin` フォルダにコピーし、
 端末の地図設定で「地理院地図Vector」を有効にします。
 
-日本語が表示されない場合は、`just img --code-page 932`（Shift_JIS）で作り直してください。
+日本語が表示されない場合は、設定ファイルの `[map]` で `code_page = 932`（Shift_JIS）にして作り直してください。
 
 ### 見た目を調整する
 
@@ -82,17 +82,14 @@ just hillshade=true all
 | `style/gsi/` | mkgmap スタイル。どの地物を Garmin のどの種別にし、どのズームから表示するか |
 | `tools/gen_typ.py` | TYP（色・線種・アイコン）の生成スクリプト。`python3 tools/gen_typ.py style/gsi.typ.txt` で再生成 |
 
-`just img --style style/gsi --typ style/gsi.typ.txt` とすると、ビルドし直さずに編集中のスタイルと TYP を試せます。
+設定ファイルの `[build]` で `style = "style/gsi"`、`typ = "style/gsi.typ.txt"` とすると、ビルドし直さずに編集中のスタイルと TYP を試せます。
 
 ### コマンドを直接使う
 
 ```sh
-gsi2garmin fetch --bbox 138.95,35.70,139.25,35.90 -o data/tiles/okutama.mbtiles
-gsi2garmin fetch --source dem --bbox 138.95,35.70,139.25,35.90 -o data/tiles/okutama-dem.mbtiles
-gsi2garmin build data/tiles/okutama.mbtiles --dem data/tiles/okutama-dem.mbtiles -o data/output/okutama.img
+gsi2garmin fetch                        # カレントフォルダの gsi2garmin.toml を使う
+gsi2garmin --config tanzawa.toml build  # 設定ファイルを指定する
 ```
-
-すべてのオプションは `gsi2garmin fetch --help` / `gsi2garmin build --help` で確認できます。
 
 ## データの出典
 

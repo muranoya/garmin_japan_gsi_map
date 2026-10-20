@@ -43,6 +43,21 @@ pub struct BBox {
 const MAX_LAT: f64 = 85.051_128_779_806_59;
 
 impl BBox {
+    /// 値の範囲を確かめて作る。
+    pub fn new(min_lon: f64, min_lat: f64, max_lon: f64, max_lat: f64) -> Result<Self> {
+        let s = format!("{min_lon},{min_lat},{max_lon},{max_lat}");
+        if !(-180.0..=180.0).contains(&min_lon) || !(-180.0..=180.0).contains(&max_lon) {
+            bail!("経度が範囲外です: {s}");
+        }
+        if !(-MAX_LAT..=MAX_LAT).contains(&min_lat) || !(-MAX_LAT..=MAX_LAT).contains(&max_lat) {
+            bail!("緯度が範囲外です: {s}");
+        }
+        if min_lon >= max_lon || min_lat >= max_lat {
+            bail!("bbox の最小値が最大値以上になっています: {s}");
+        }
+        Ok(BBox { min_lon, min_lat, max_lon, max_lat })
+    }
+
     /// 2 つの範囲を包含する範囲を返す。
     pub fn union(&self, other: &BBox) -> BBox {
         BBox {
@@ -79,16 +94,7 @@ impl FromStr for BBox {
         let [min_lon, min_lat, max_lon, max_lat] = v[..] else {
             bail!("bbox は minlon,minlat,maxlon,maxlat の 4 値で指定してください: {s}");
         };
-        if !(-180.0..=180.0).contains(&min_lon) || !(-180.0..=180.0).contains(&max_lon) {
-            bail!("経度が範囲外です: {s}");
-        }
-        if !(-MAX_LAT..=MAX_LAT).contains(&min_lat) || !(-MAX_LAT..=MAX_LAT).contains(&max_lat) {
-            bail!("緯度が範囲外です: {s}");
-        }
-        if min_lon >= max_lon || min_lat >= max_lat {
-            bail!("bbox の最小値が最大値以上になっています: {s}");
-        }
-        Ok(BBox { min_lon, min_lat, max_lon, max_lat })
+        BBox::new(min_lon, min_lat, max_lon, max_lat)
     }
 }
 

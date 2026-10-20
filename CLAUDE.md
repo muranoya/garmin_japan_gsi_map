@@ -71,10 +71,13 @@
   なるまで四分木で範囲を分け、区画ごとに `<bounds>` 付きの OSM を書き出す。mkgmap は区画を並列に処理する。
   目安: 奥多摩〜東京（約 2.4 万タイル）で 160 区画、最大の区画でも RGN は上限の約 20%
 - 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
-- CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、エリアは `just area=<名前> bbox=<範囲> ...` で指定）:
-  - `gsi2garmin fetch --bbox <minlon,minlat,maxlon,maxlat> -o area.mbtiles`
-  - `gsi2garmin fetch --source dem --bbox ... -o area-dem.mbtiles`（標高タイル。陰影起伏用）
-  - `gsi2garmin build <tiles_dir|area.mbtiles> -o area.img [--dem area-dem.mbtiles] [--work-dir <dir>] [--style <dir>] [--typ <file>] [--code-page 932]`
+- CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、設定ファイルは `just config=<file> ...` で指定）:
+  - `gsi2garmin [--config gsi2garmin.toml] fetch`（ベクタタイル。陰影起伏が有効なら標高タイルも）
+  - `gsi2garmin [--config gsi2garmin.toml] build`
+- 設定（範囲・ファイルの保存先・陰影起伏の有無・地図名・文字コードなど）はすべて TOML の設定ファイルに書き、
+  CLI 引数では渡さない。項目は `src/config.rs`、説明付きの例はリポジトリ直下の `gsi2garmin.toml`。
+  項目を増やしたら `gsi2garmin.toml` にもコメント付きで書き足す
+- 陰影起伏は既定で無効（端末の描画が重くなり、縮小時に山地が灰色っぽく見えるため）
 - 見た目の定義:
   - `style/gsi/`: mkgmap スタイル（地物 → Garmin 種別・表示解像度）。`options` の `levels` は DEM の点間隔にも使う
   - `style/gsi.typ.txt`: TYP（色・線種・アイコン）。**`tools/gen_typ.py` から生成する**ので、変更はスクリプト側で行い

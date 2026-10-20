@@ -1,0 +1,57 @@
+# gsi2garmin の設定ファイル
+#
+# `gsi2garmin fetch` / `gsi2garmin build`（普段は `just fetch` / `just img`）はこのファイルの設定で動く。
+# 別の設定ファイルを使うときは `gsi2garmin --config <ファイル>`（`just config=<ファイル> img`）で指定する。
+# 相対パスはこのファイルのあるフォルダが基準。コメントアウトしている項目は省略時の値の例。
+
+# 地図にする範囲 [最小経度, 最小緯度, 最大経度, 最大緯度]
+bbox = [138.92, 35.45, 140.15, 35.92]
+
+# 取得・変換に使うズームレベル（最大 16。z14〜z16 のいずれも 25000 レベルのデータを含む）
+zoom = 16
+
+[files]
+# 取得したベクタタイル（MBTiles）。{z}/{x}/{y}.pbf 形式のフォルダも指定できる（build のみ）
+tiles = "data/tiles/okutama.mbtiles"
+# 取得した標高タイル（MBTiles）。陰影起伏を入れるときだけ使う
+dem = "data/tiles/okutama-dem.mbtiles"
+# 中間ファイル（OSM・HGT など）の置き場所。build の開始時に作り直す。
+# 範囲が広いと数 GB〜十数 GB になる。省略すると一時フォルダを使い、終了時に削除する
+work_dir = "data/work/okutama"
+# 出力する .img（端末の Garmin フォルダに置く）
+output = "data/output/okutama.img"
+
+[fetch]
+# 同時リクエスト数（1〜16）。地理院サーバへの負荷を考えて小さめに
+concurrency = 4
+# ベクタタイルの URL テンプレート
+# url = "https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/{z}/{x}/{y}.pbf"
+
+[map]
+# 端末の地図一覧に表示する名前
+name = "地理院地図Vector"
+# 地図の説明（省略時は出力ファイル名）
+# description = "okutama"
+# 文字コード。65001 = UTF-8。日本語が表示されない場合は 932（Shift_JIS）を試す
+code_page = 65001
+# Garmin のファミリー ID。端末に入れる他の地図と重ならない値にする
+family_id = 7251
+
+[hillshade]
+# 陰影起伏（山肌の影）を入れるか。true にすると fetch で標高タイルも取得する。
+# 端末での描画が重くなり、縮小時に山地が灰色っぽく見えるので既定では入れない
+enabled = false
+# 標高タイルの種類。dem10b = DEM10B（全国）/ dem5a = DEM5A（航空レーザ測量の範囲のみ）
+source = "dem10b"
+# 標高タイルの URL テンプレート（省略時は source に応じた地理院の URL）
+# url = "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png"
+
+[build]
+# 地図を分割するときの 1 区画あたりのノード数の上限。
+# mkgmap が「RGN section ... is too big」で失敗する場合は小さくする
+max_nodes = 2000000
+# 見た目の試行錯誤用。指定するとビルドし直さずに編集中のスタイル・TYP を使える（省略時は同梱のもの）
+# style = "style/gsi"
+# typ = "style/gsi.typ.txt"
+# mkgmap.jar のパス（省略時は自動でダウンロードして ~/.cache/gsi2garmin/ にキャッシュする）
+# mkgmap = "/path/to/mkgmap.jar"

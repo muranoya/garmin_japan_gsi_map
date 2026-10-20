@@ -1,4 +1,5 @@
 mod build;
+mod config;
 mod dem;
 mod fetch;
 mod geom;
@@ -10,132 +11,86 @@ mod source;
 mod split;
 mod tile;
 
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
+use config::Config;
 use std::path::PathBuf;
-use tile::BBox;
 
 /// 地理院地図Vector から Garmin 用ベクタ地図を作るツール
+///
+/// 範囲・出力先・陰影起伏の有無などの設定はすべて設定ファイル（TOML）に書く。
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
+    /// 設定ファイル
+    #[arg(short, long, global = true, default_value = "gsi2garmin.toml")]
+    config: PathBuf,
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// 地理院ベクタタイルを取得して MBTiles に保存する（中断しても再実行で続きから取得）
-    Fetch {
-        /// 取得範囲 minlon,minlat,maxlon,maxlat（例: 奥多摩 138.95,35.70,139.25,35.90）
-        #[arg(long, allow_hyphen_values = true)]
-        bbox: BBox,
-        /// 取得するデータの種類
-        #[arg(long, value_enum, default_value_t = fetch::Dataset::Vector)]
-        source: fetch::Dataset,
-        /// 取得するズームレベル（カンマ区切りで複数指定可。省略時はデータの最大ズーム）
-        #[arg(long, value_delimiter = ',')]
-        zoom: Vec<u8>,
-        /// 保存先の MBTiles ファイル（既存なら追記）
-        #[arg(short, long)]
-        output: PathBuf,
-        /// 同時リクエスト数（地理院サーバへの負荷を考えて小さめに）
-        #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u16).range(1..=16))]
-        concurrency: u16,
-        /// タイル URL テンプレート（省略時は --source に応じた地理院の URL）
-        #[arg(long)]
-        url: Option<String>,
-    },
-    /// タイル（MBTiles またはフォルダ）から Garmin 用の .img を作る
-    Build {
-        /// 入力: MBTiles ファイル、または {z}/{x}/{y}.pbf 形式のフォルダ
-        input: PathBuf,
-        /// 出力する .img ファイル（端末の /Garmin フォルダに置く）
-        #[arg(short, long)]
-        output: PathBuf,
-        /// 使うズームレベル（省略時は入力の最大ズーム）
-        #[arg(long)]
-        zoom: Option<u8>,
-        /// mkgmap のスタイルフォルダ（省略時は同梱の style/gsi）
-        #[arg(long)]
-        style: Option<PathBuf>,
-        /// mkgmap.jar のパス（省略時は自動でダウンロードしてキャッシュする）
-        #[arg(long)]
-        mkgmap: Option<PathBuf>,
-        /// 中間ファイルを残すフォルダ（省略時は一時フォルダを使って削除する）
-        #[arg(long)]
-        work_dir: Option<PathBuf>,
-        /// TYP ファイル（テキスト形式。省略時は同梱の style/gsi.typ.txt）
-        #[arg(long)]
-        typ: Option<PathBuf>,
-        /// 陰影起伏用の標高タイル（`fetch --source dem` で取得した MBTiles またはフォルダ）
-        #[arg(long)]
-        dem: Option<PathBuf>,
-        /// 地図を分割するときの 1 区画あたりのノード数の上限。
-        /// mkgmap が「RGN section ... is too big」で失敗する場合は小さくする
-        #[arg(long, default_value_t = 2_000_000)]
-        max_nodes: usize,
-        /// 端末の地図一覧に表示する名前
-        #[arg(long, default_value = "地理院地図Vector")]
-        name: String,
-        /// 地図の説明（省略時は入力ファイル名）
-        #[arg(long)]
-        description: Option<String>,
-        /// 文字コード。65001 = UTF-8、日本語が表示できない場合は 932（Shift_JIS）を試す
-        #[arg(long, default_value_t = 65001)]
-        code_page: u16,
-        /// Garmin のファミリー ID。他の地図と重ならない値にする
-        #[arg(long, default_value_t = 7251)]
-        family_id: u16,
-    },
+    /// タイルを取得して MBTiles に保存する（中断しても再実行で続きから取得）。
+    /// 陰影起伏を入れる設定なら標高タイルも取得する
+    Fetch,
+    /// 取得したタイルから Garmin 用の .img を作る
+    Build,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    match Cli::parse().command {
-        Command::Fetch { bbox, source, zoom, output, concurrency, url } => {
-            let max = source.max_zoom();
-            let zooms = if zoom.is_empty() { vec![max] } else { zoom };
-            ensure!(zooms.iter().all(|&z| z <= max), "ズームレベルは 0〜{max} で指定してください");
+    let cli = Cli::parse();
+    let config = Config::load(&cli.config)?;
+    match cli.command {
+        Command::Fetch => {
+            let bbox = config.bbox()?;
+            let vector = fetch::Dataset::Vector;
             fetch::run(fetch::FetchOptions {
                 bbox,
-                zooms,
-                output,
-                url_template: url.unwrap_or_else(|| source.url().to_string()),
-                concurrency: concurrency.into(),
-                dataset: source,
+                zooms: vec![config.zoom.unwrap_or(vector.max_zoom())],
+                output: config.files.tiles.clone(),
+                url_template: config.fetch.url.clone().unwrap_or_else(|| vector.url().to_string()),
+                concurrency: config.fetch.concurrency.into(),
+                dataset: vector,
             })
-            .await
+            .await?;
+            if let Some(dem) = config.dem() {
+                let source = config.hillshade.source.dataset();
+                eprintln!("標高タイル（陰影起伏用）を取得します");
+                fetch::run(fetch::FetchOptions {
+                    bbox,
+                    zooms: vec![source.max_zoom()],
+                    output: dem.to_path_buf(),
+                    url_template: config.hillshade.url.clone().unwrap_or_else(|| source.url().to_string()),
+                    concurrency: config.fetch.concurrency.into(),
+                    dataset: source,
+                })
+                .await?;
+            }
+            Ok(())
         }
-        Command::Build {
-            input,
-            output,
-            zoom,
-            style,
-            mkgmap,
-            work_dir,
-            typ,
-            dem,
-            max_nodes,
-            name,
-            description,
-            code_page,
-            family_id,
-        } => {
-            let description = description.unwrap_or_else(|| {
-                input.file_stem().map_or(name.clone(), |s| s.to_string_lossy().into_owned())
+        Command::Build => {
+            let output = config.files.output.clone();
+            let description = config.map.description.clone().unwrap_or_else(|| {
+                output.file_stem().map_or(config.map.name.clone(), |s| s.to_string_lossy().into_owned())
             });
             build::run(build::BuildOptions {
-                input,
+                input: config.files.tiles.clone(),
                 output,
-                zoom,
-                style,
-                mkgmap,
-                work_dir,
-                typ,
-                dem,
-                max_nodes,
-                map: mkgmap::MapInfo { family_id, name, description, code_page },
+                zoom: config.zoom,
+                style: config.build.style.clone(),
+                mkgmap: config.build.mkgmap.clone(),
+                work_dir: config.files.work_dir.clone(),
+                typ: config.build.typ.clone(),
+                dem: config.dem().map(PathBuf::from),
+                max_nodes: config.build.max_nodes,
+                map: mkgmap::MapInfo {
+                    family_id: config.map.family_id,
+                    name: config.map.name.clone(),
+                    description,
+                    code_page: config.map.code_page,
+                },
             })
             .await
         }

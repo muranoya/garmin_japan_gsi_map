@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// 取得するデータの種類。URL・既定ズーム・MBTiles のメタデータを決める。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dataset {
     /// 地理院地図Vector（ベクタタイル, 最大 z16）
     Vector,
@@ -72,6 +72,9 @@ enum Outcome {
 }
 
 pub async fn run(opts: FetchOptions) -> Result<()> {
+    if let Some(dir) = opts.output.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     let db = MbTiles::open(&opts.output)?;
 
     let mut targets = Vec::new();

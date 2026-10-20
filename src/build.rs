@@ -39,6 +39,14 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     let tmp;
     let work = match &opts.work_dir {
         Some(d) => {
+            // 前回の中間ファイルが残っていると容量を食うので作り直す
+            for sub in ["osm", "hgt", "out"] {
+                let p = d.join(sub);
+                if p.exists() {
+                    std::fs::remove_dir_all(&p)
+                        .with_context(|| format!("作業フォルダを削除できません: {}", p.display()))?;
+                }
+            }
             std::fs::create_dir_all(d)?;
             d.clone()
         }
@@ -115,6 +123,9 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     let img = mkgmap::run(&jar, &style_dir, &inputs, &work.join("out"), &opts.map, &extra)?;
     eprintln!("mkgmap: {:.1?}", started.elapsed());
 
+    if let Some(dir) = opts.output.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     std::fs::copy(&img, &opts.output)
         .with_context(|| format!("出力先に書き込めません: {}", opts.output.display()))?;
     eprintln!("出力しました: {}", opts.output.display());
