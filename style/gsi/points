@@ -19,14 +19,15 @@ gsi_layer=label & annoCtg=421 { name '${knj}' } [0x2f09 resolution 21]
 gsi_layer=label & annoCtg ~ '31[1456]' { name '${knj}' } [0x6616 resolution 20]
 gsi_layer=label & annoCtg=312 { name '${knj}' } [0x6616 resolution 21]
 gsi_layer=label & annoCtg=313 { name '${knj}' } [0x6616 resolution 22]
+# 山の中の地名（沢・谷・岩・鍾乳洞・峠など）は登山で目印になるので、山名と同じ解像度 21 から表示する。
 # 323 沢、瀬、淵、谷、滝等。滝は種別を分ける
-gsi_layer=label & annoCtg=323 & knj ~ '.*滝' { name '${knj}' } [0x6508 resolution 22]
+gsi_layer=label & annoCtg=323 & knj ~ '.*滝' { name '${knj}' } [0x6508 resolution 21]
 # 321 湖、沼、池 / 322 河川、用水 / 323 沢、谷等
 gsi_layer=label & annoCtg ~ '32[12]' { name '${knj}' } [0x650d resolution 21]
-gsi_layer=label & annoCtg=323 { name '${knj}' } [0x650d resolution 22]
+gsi_layer=label & annoCtg=323 { name '${knj}' } [0x650d resolution 21]
 # 332 岩、崖、鍾乳洞、温泉、峠、坂等（峠は種別を分ける）
-gsi_layer=label & annoCtg=332 & knj ~ '.*峠' { name '${knj}' } [0x660b resolution 22]
-gsi_layer=label & annoCtg=332 { name '${knj}' } [0x660b resolution 23]
+gsi_layer=label & annoCtg=332 & knj ~ '.*峠' { name '${knj}' } [0x660b resolution 21]
+gsi_layer=label & annoCtg=332 { name '${knj}' } [0x660b resolution 21]
 # 331 高原、原、森、平等 / 333 山脈、山地 / 334 平野、盆地 / 34x 海・岬 / 35x 島
 gsi_layer=label & annoCtg ~ '33[134]|3[45][0-9]' { name '${knj}' } [0x2800 resolution 21]
 # 210 町字名 / 220 集落名称
@@ -41,13 +42,14 @@ gsi_layer=label & annoCtg=521 { name '${knj}' } [0x650d resolution 22]
 gsi_layer=label & knj=* { name '${knj}' } [0x2800 resolution 24]
 
 # ---- 標高点（elevation レイヤ）----
-# 7201 標高点
-gsi_layer=elevation & ftCode=7201 { name '${alti}' } [0x2801 resolution 22]
+# 7201 標高点。山地では非常に多く、端末は文字が重なると間引くので、早く出すと山名や地名が押し出されて
+# 消えてしまう。最も拡大したときだけ表示する
+gsi_layer=elevation & ftCode=7201 { name '${alti}' } [0x2801 resolution 24]
 
 # ---- 地図記号（symbol レイヤ）----
 # 0x28xx の各種別に TYP で地理院風のアイコンを割り当てている
 # 7102 三角点 / 7103 水準点
-gsi_layer=symbol & ftCode=7102 { name '${alti}' } [0x2802 resolution 22]
+gsi_layer=symbol & ftCode=7102 { name '${alti}' } [0x2802 resolution 23]
 gsi_layer=symbol & ftCode=7103 [0x2803 resolution 24]
 # 3231 神社 / 3232 寺院
 gsi_layer=symbol & ftCode=3231 [0x2805 resolution 23]
