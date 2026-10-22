@@ -9,6 +9,7 @@ use crate::source::TileSource;
 use crate::split;
 use crate::tile::TileCoord;
 use anyhow::{Context, Result, bail, ensure};
+use flate2::{Compression, write::GzEncoder};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -119,7 +120,7 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     );
     let size: u64 = osm_paths.iter().map(|p| std::fs::metadata(p).map_or(0, |m| m.len())).sum();
     eprintln!(
-        "タイルの読み込み・結合・OSM XML 書き出し: {} 区画 {:.1?}（{:.1} MB）",
+        "タイルの読み込み・結合・OSM XML 書き出し: {} 区画 {:.1?}（gzip 圧縮後 {:.1} MB）",
         osm_paths.len(),
         started.elapsed(),
         size as f64 / 1e6
@@ -214,7 +215,7 @@ fn tiles_bounds<'a>(grid: Grid, tiles: impl Iterator<Item = &'a TileCoord>) -> B
     Bounds { min: grid.tile_bounds(tmin.0, tmin.1).min, max: grid.tile_bounds(tmax.0, tmax.1).max }
 }
 
-/// 1 つの領域のタイルを読み込んで切り取り・結合し、区画に分けて OSM XML を書き出す。
+/// 1 つの領域のタイルを読み込んで切り取り・結合し、区画に分けて OSM XML（gzip 圧縮）を書き出す。
 ///
 /// 領域どうしを並列に処理するので、領域内は 1 スレッドで処理する（同時にメモリに載る領域の数を
 /// スレッド数までに抑えるため）。線は領域の境界で切れるが、区画の境界でも切るので結果は変わらない。
@@ -278,10 +279,11 @@ fn process_region(
         // mkgmap は 8 桁の数字のファイル名をそのタイルの mapname として使う
         let id = next_id.fetch_add(1, Ordering::Relaxed) + 1;
         ensure!(id <= 9999, "区画が 9999 を超えました。build.max_nodes を大きくしてください");
-        let path = osm_dir.join(format!("{}{id:04}.osm", opts.map.family_id));
+        let path = osm_dir.join(format!("{}{id:04}.osm.gz", opts.map.family_id));
         let part_items = split::clip_items(&items, &part);
-        let mut w = BufWriter::new(File::create(&path)?);
+        let mut w = BufWriter::new(GzEncoder::new(File::create(&path)?, Compression::fast()));
         osm::write(&mut w, &grid, Some(&part), &tag_table, &part_items)?;
+        w.into_inner().map_err(|e| e.into_error())?.finish()?;
         paths.push(path);
     }
     Ok(RegionOut { paths, pieces, lines, features: items.len() })

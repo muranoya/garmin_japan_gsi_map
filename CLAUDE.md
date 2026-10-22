@@ -59,7 +59,7 @@
   → MVT デコード
   → タイル境界で分断された地物の再結合
   → ftCode 等 → OSM 風タグへの変換
-  → .osm.pbf（または OSM XML）出力
+  → OSM XML（gzip 圧縮）出力
   → mkgmap（+ style + TYP）で gmapsupp.img を生成
 ```
 
@@ -79,7 +79,8 @@
 - 全国規模でも全地物をメモリに載せないよう、先にタイルを四分木で「領域」に分け（`split::plan_regions`。
   データ量は圧縮されたままのタイルのバイト数で見積もる）、領域ごとに読込・結合・区画への分割・書き出しを行う。
   領域どうしを並列に処理し、領域内は 1 スレッドで処理する。線は領域の境界でも切れる（区画の境界と同じ扱い）。
-  目安: 関東周辺 8.3 万タイル（全国の約 1/10）で Rust 側最大 1.1GB
+  OSM XML は gzip 圧縮（`.osm.gz`）で書き出す。目安: 関東周辺 8.3 万タイル（全国の約 1/10）で
+  Rust 側 28 秒・最大 1.1GB、OSM 4.4GB、mkgmap 86 秒・最大 8.7GB
 - 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
 - CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、設定ファイルは `just config=<file> ...` で指定）:
   - `gsi2garmin [--config gsi2garmin.toml] fetch`（ベクタタイル。陰影起伏が有効なら標高タイルも）
