@@ -1,5 +1,12 @@
+# 解像度 21 以下は低ズームのタイルの地物（gsi_zoom タグ付き）で描く（lines の冒頭を参照）
+gsi_zoom=13 & gsi_layer=waterarea & ftCode=5000 [0x3c resolution 21-21]
+gsi_zoom=12 & gsi_layer=waterarea & ftCode=5000 [0x3c resolution 20-20]
+gsi_zoom=10 & gsi_layer=waterarea & ftCode=5000 [0x3c resolution 18-19]
+gsi_zoom=8 & gsi_layer=waterarea & ftCode=5000 [0x3c resolution 16-17]
+gsi_zoom=* { deletealltags }
+
 # 5000 水域
-gsi_layer=waterarea & ftCode=5000 [0x3c resolution 20]
+gsi_layer=waterarea & ftCode=5000 [0x3c resolution 22]
 # 3101 普通建物 / 3102 堅ろう建物 / 3103 高層建物 / 3111,3112 無壁舎
 # 建物は数が非常に多く（市街地では他の地物すべてを合わせたより多い）、縮小表示で描くと端末の描画が
 # 重くなるので、最も詳細な段だけで表示する

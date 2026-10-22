@@ -1,16 +1,61 @@
 # 表示する解像度は地理院地図（ラスタの標準地図）を参考にしている。
 # 解像度 r はおおよそ Web 地図のズーム r-8 に当たる（24 ≒ z16, 20 ≒ z12, 18 ≒ z10）。
 # 端末の画面は小さいので、地理院地図より 1 段ほど遅らせて表示するものもある。
+#
+# 解像度 22 以上は基準ズーム（z14）の地物で描き、それより縮小した段は地理院が小縮尺用に作った
+# 低ズームのタイルの地物（gsi_zoom タグ付き）で描く。段とズームの対応:
+#   解像度 21 ← z13 / 20 ← z12 / 18〜19 ← z10 / 16〜17 ← z8
+# 低ズームのタイルには地理院が縮尺に合わせて選び、形を簡略化した地物が入っている
+# （等高線は z12・z13 で 100m 間隔、道路は国道・都道府県道が中心など）。
+
+# ---- 縮小表示用（gsi_zoom）----
+# 等高線。z12 では 200m ごとに間引く
+gsi_zoom=13 & gsi_layer=contour & ftCode ~ '735[123]'
+    { name '${alti|conv:m=>ft}' } [0x22 resolution 21-21]
+gsi_zoom=12 & gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[02468]00'
+    { name '${alti|conv:m=>ft}' } [0x22 resolution 20-20]
+# 道路（中心線の通常部・トンネル等。庭園路・徒歩道・石段は低ズームでは使わない）。
+# 種類の判定は基準ズームの道路と同じく上の規則を優先する（gsi_road を一度だけ設定する）
+gsi_zoom ~ '8|10|12|13' & gsi_layer=road & ftCode ~ '270[0-9]' & (motorway=1 | rdCtg=3) { set gsi_road=1 }
+gsi_zoom ~ '8|10|12|13' & gsi_layer=road & ftCode ~ '270[0-9]' & rdCtg=0 & gsi_road!=* { set gsi_road=2 }
+gsi_zoom ~ '12|13' & gsi_layer=road & ftCode ~ '270[0-9]' & rdCtg=1 & gsi_road!=* { set gsi_road=3 }
+gsi_zoom=13 & gsi_layer=road & ftCode ~ '270[0-9]' & rnkWidth ~ '[34]' & gsi_road!=* { set gsi_road=5 }
+gsi_zoom=13 & gsi_road=1 [0x01 resolution 21-21]
+gsi_zoom=13 & gsi_road=2 [0x02 resolution 21-21]
+gsi_zoom=13 & gsi_road=3 [0x03 resolution 21-21]
+gsi_zoom=13 & gsi_road=5 [0x05 resolution 21-21]
+gsi_zoom=12 & gsi_road=1 [0x01 resolution 20-20]
+gsi_zoom=12 & gsi_road=2 [0x02 resolution 20-20]
+gsi_zoom=12 & gsi_road=3 [0x03 resolution 20-20]
+gsi_zoom=10 & gsi_road=1 [0x01 resolution 18-19]
+gsi_zoom=10 & gsi_road=2 [0x02 resolution 18-19]
+gsi_zoom=8 & gsi_road=1 [0x01 resolution 16-17]
+gsi_zoom=8 & gsi_road=2 [0x02 resolution 16-17]
+# 鉄道（側線・路面電車・索道を除く。種別 0x04 にする理由は下の鉄道の項を参照）
+gsi_zoom=* & gsi_layer=railway & ftCode=8201 & snglDbl!=3 & !(rtCode ~ '4020[46].*') { set gsi_rail=1 }
+gsi_zoom=13 & gsi_rail=1 [0x04 resolution 21-21]
+gsi_zoom=12 & gsi_rail=1 [0x04 resolution 20-20]
+gsi_zoom=10 & gsi_rail=1 [0x04 resolution 18-19]
+gsi_zoom=8 & gsi_rail=1 [0x04 resolution 16-17]
+# 河川（低ズームのタイルには主な川だけが入っている）
+gsi_zoom=* & gsi_layer=river & ftCode ~ '5201|5203|5301' { set gsi_river=1 }
+gsi_zoom=13 & gsi_river=1 [0x18 resolution 21-21]
+gsi_zoom=12 & gsi_river=1 [0x18 resolution 20-20]
+gsi_zoom=10 & gsi_river=1 [0x18 resolution 18-19]
+# 境界（都府県界は z12 から、市区町村界は z13 だけ）
+gsi_zoom ~ '12|13' & gsi_layer=boundary & ftCode=1211 [0x1d resolution 20-21]
+gsi_zoom=13 & gsi_layer=boundary & ftCode=1212 [0x1c resolution 21-21]
+gsi_zoom=* { deletealltags }
 
 # ---- 等高線 ----
 # ftCode 7351 通常部 / 7352 数値部 / 7353 崖部。等深線（737x）は扱わない。
 # 標高は Garmin の慣例に従いフィートで名前に入れる（端末側で設定単位に換算表示される）。
-# ズームアウトに応じて 補助曲線と主曲線(10m) → 20m ごと → 計曲線(50m) → 200m ごと の順に間引く。
+# ズームアウトに応じて 補助曲線と主曲線(10m) → 20m ごと → 計曲線(50m) の順に間引く（解像度 21 以下は縮小表示用を参照）。
 # 判定は標高の末尾の数字で行う（例: 200m ごとは百の位が偶数で末尾 "00"）。
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[02468]00'
-    { name '${alti|conv:m=>ft}' } [0x22 resolution 20]
+    { name '${alti|conv:m=>ft}' } [0x22 resolution 22]
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[05]0'
-    { name '${alti|conv:m=>ft}' } [0x22 resolution 21]
+    { name '${alti|conv:m=>ft}' } [0x22 resolution 22]
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*[02468]0'
     { name '${alti|conv:m=>ft}' } [0x21 resolution 23]
 gsi_layer=contour & ftCode ~ '735[123]' & alti ~ '-?[0-9]*0'
@@ -24,14 +69,14 @@ gsi_layer=contour & ftCode ~ '735[123]'
 # ftCode 2721-2723 徒歩道 / 2731-2734 石段 / 2711,2713,2714 庭園路
 # rdCtg 0 国道 / 1 都道府県道 / 2,5,6 市区町村道・その他 / 3 高速自動車国道等
 # rnkWidth 0 3m未満 / 1 3-5.5m / 2 5.5-13m / 3 13-19.5m / 4 19.5m以上
-# ズームアウトしたときは高速道路・国道・都道府県道と幅の広い道路だけを残す。
+# ズームアウトしたとき（解像度 21 以下）は縮小表示用の道路（高速道路・国道・都道府県道など）に替わる。
 gsi_layer=road & !(ftCode ~ '27[0-9][0-9]') { deletealltags }
 gsi_layer=road & ftCode ~ '272[1-4]|273[1-4]' [0x16 resolution 22]
 gsi_layer=road & ftCode ~ '271[134]' [0x07 resolution 24]
-gsi_layer=road & (motorway=1 | rdCtg=3) [0x01 resolution 18]
-gsi_layer=road & rdCtg=0 [0x02 resolution 18]
-gsi_layer=road & rdCtg=1 [0x03 resolution 20]
-gsi_layer=road & rnkWidth ~ '[34]' [0x05 resolution 21]
+gsi_layer=road & (motorway=1 | rdCtg=3) [0x01 resolution 22]
+gsi_layer=road & rdCtg=0 [0x02 resolution 22]
+gsi_layer=road & rdCtg=1 [0x03 resolution 22]
+gsi_layer=road & rnkWidth ~ '[34]' [0x05 resolution 22]
 gsi_layer=road & rnkWidth=2 [0x05 resolution 22]
 gsi_layer=road & rnkWidth=1 [0x06 resolution 23]
 gsi_layer=road [0x07 resolution 23]
@@ -42,9 +87,9 @@ gsi_layer=road [0x07 resolution 23]
 # railState 2,3,100,300 トンネル・地下 / snglDbl 3 側線
 gsi_layer=railway & ftCode!=8201 { deletealltags }
 # 端末は鉄道の種別（0x14 や拡張種別）を、.img の段にかかわらず拡大するまで描かない。
-# 縮小表示（解像度 18〜22）では、道路の種別 0x04（このスタイルでは未使用）でも出力して描かせる。
+# 縮小表示（解像度 22。21 以下は縮小表示用の鉄道）では、道路の種別 0x04（このスタイルでは未使用）でも出力して描かせる。
 # 見た目は TYP で鉄道にしている。トンネルも線がつながって見えるよう同じ種別にする。
-gsi_layer=railway & snglDbl!=3 & !(rtCode ~ '4020[46].*') [0x04 resolution 18-22 continue]
+gsi_layer=railway & snglDbl!=3 & !(rtCode ~ '4020[46].*') [0x04 resolution 22-22 continue]
 gsi_layer=railway & railState ~ '2|3|100|300' [0x10e05 resolution 23]
 gsi_layer=railway & snglDbl=3 [0x10e04 resolution 23]
 gsi_layer=railway & rtCode ~ '4020[46].*' [0x10e04 resolution 23]
@@ -53,14 +98,14 @@ gsi_layer=railway [0x10e04 resolution 23]
 
 # ---- 河川 ----
 # 5201,5301 通常部 / 5203 堤防等に接する部分 / 5302 枯れ川部 / 5321 人工水路（空間）/ 5322 人工水路（地下）
-gsi_layer=river & ftCode ~ '5201|5203|5301' [0x18 resolution 21]
+gsi_layer=river & ftCode ~ '5201|5203|5301' [0x18 resolution 22]
 gsi_layer=river & ftCode=5302 [0x26 resolution 22]
 gsi_layer=river & ftCode=5321 [0x18 resolution 23]
 
 # ---- 境界・構造物 ----
 # 1211 都府県界 / 1212 市区町村界 / 8202 送電線
-gsi_layer=boundary & ftCode=1211 [0x1d resolution 19]
-gsi_layer=boundary & ftCode=1212 [0x1c resolution 21]
+gsi_layer=boundary & ftCode=1211 [0x1d resolution 22]
+gsi_layer=boundary & ftCode=1212 [0x1c resolution 22]
 gsi_layer=structurel & ftCode=8202 [0x29 resolution 23]
 
 # ---- 地形表現（landforml）----

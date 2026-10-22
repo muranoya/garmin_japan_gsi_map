@@ -7,12 +7,12 @@ use crate::mvt::{self, Geometry};
 use crate::osm::{self, Feature, Item, Tags};
 use crate::source::TileSource;
 use crate::split;
-use crate::tile::TileCoord;
+use crate::tile::{self, TileCoord};
 use anyhow::{Context, Result, bail, ensure};
 use flate2::{Compression, write::GzEncoder};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
@@ -22,9 +22,10 @@ use std::time::Instant;
 /// タイル境界で線を結合するときの端点の許容距離（ピクセル）。z16 で 8px ≒ 1m。
 const MERGE_TOLERANCE_PX: f64 = 8.0;
 
-/// 縮小表示用の注記を取るズーム。地理院は小縮尺の地図向けに主な山名などを選んで低ズームのタイルに
-/// 収録しているので、このズームのタイルの点を `gsi_zoom` タグ付きで加え、どれを使うかはスタイルで決める。
-pub const OVERVIEW_ZOOM: u8 = 10;
+/// 縮小表示用のデータを取るズーム。地理院は低ズームのタイルに小縮尺の地図向けのデータ（主な山名・
+/// 100m 間隔の等高線・主な道路や河川など）を収録しているので、基準ズームより低いこれらのズームの地物を
+/// `gsi_zoom` タグ付きで加え、どの段にどれを使うかはスタイルで決める。
+pub const OVERVIEW_ZOOMS: [u8; 4] = [8, 10, 12, 13];
 
 /// 領域（まとめて処理するタイルの集まり）のデータ量の上限を、区画のノード数の上限から決めるための係数。
 /// 圧縮されたままのタイル 1 バイトがおよそ 0.17 ノードになる（奥多摩〜東京で計測）ので、
@@ -82,13 +83,10 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     let area = tiles_bounds(grid, tiles.iter().map(|(t, _)| t));
     let (west, north) = grid.to_lonlat(area.min);
     let (east, south) = grid.to_lonlat(area.max);
-    let overview = if z > OVERVIEW_ZOOM && zooms.contains(&OVERVIEW_ZOOM) {
-        let points = overview_points(&src, grid, &area)?;
-        eprintln!("z{OVERVIEW_ZOOM}: 縮小表示用の点 {} 件", points.len());
-        points
-    } else {
-        Vec::new()
-    };
+    let overview_zooms: Vec<u8> = OVERVIEW_ZOOMS.into_iter().filter(|lz| *lz < z && zooms.contains(lz)).collect();
+    if !overview_zooms.is_empty() {
+        eprintln!("縮小表示用に z{overview_zooms:?} のタイルも使います");
+    }
     drop(src);
 
     // 全地物をメモリに載せずに済むよう、タイルを領域に分けて領域ごとに処理する
@@ -103,7 +101,7 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     let outs: Vec<RegionOut> = regions
         .par_iter()
         .map(|tiles| {
-            let out = process_region(&opts, grid, tiles, &overview, &osm_dir, &next_id);
+            let out = process_region(&opts, grid, tiles, &overview_zooms, &osm_dir, &next_id);
             pb.inc(1);
             out
         })
@@ -223,7 +221,7 @@ fn process_region(
     opts: &BuildOptions,
     grid: Grid,
     tiles: &[TileCoord],
-    overview: &[(Tags, P)],
+    overview_zooms: &[u8],
     osm_dir: &Path,
     next_id: &AtomicUsize,
 ) -> Result<RegionOut> {
@@ -268,10 +266,12 @@ fn process_region(
     let lines = items.len() - before;
 
     let area = tiles_bounds(grid, tiles.iter());
-    for (tags, p) in overview {
-        if area.contains_half_open(*p) {
-            items.push(Item { tags: intern(tags.clone()), feature: Feature::Point(*p) });
-        }
+    for &lz in overview_zooms {
+        let low: Vec<Item> = overview_features(&src, grid, lz, tiles)?
+            .into_iter()
+            .map(|(tags, feature)| Item { tags: intern(tags), feature })
+            .collect();
+        items.extend(split::clip_items(&low, &area));
     }
 
     let mut paths = Vec::new();
@@ -289,27 +289,53 @@ fn process_region(
     Ok(RegionOut { paths, pieces, lines, features: items.len() })
 }
 
-/// 縮小表示用のズームのタイルから点地物を読み、`grid` の座標に換算して `area` 内のものを返す。
-/// 区別できるように `gsi_zoom` タグを付ける。
-fn overview_points(src: &TileSource, grid: Grid, area: &Bounds) -> Result<Vec<(Tags, P)>> {
-    let mut points = Vec::new();
-    src.for_each_batch(OVERVIEW_ZOOM, 256, |batch| {
-        for (t, data) in batch {
-            let Some((extent, out)) = process_tile(t, &data).with_context(|| format!("タイル {t}"))? else {
-                continue;
-            };
-            let scale = f64::from(1u32 << (grid.z - OVERVIEW_ZOOM)) * f64::from(grid.extent) / f64::from(extent);
-            for (mut tags, p) in out.points {
-                let p = [p[0] * scale, p[1] * scale];
-                if area.contains_half_open(p) {
-                    tags.push(("gsi_zoom".to_string(), OVERVIEW_ZOOM.to_string()));
-                    points.push((tags, p));
-                }
-            }
+/// 縮小表示用のズーム `lz` のタイルのうち `tiles` にかかるものを読み、`grid` の座標に換算して返す。
+/// 線は `lz` のタイル境界で結合しておく（領域の範囲での切り取りは呼び出し側で行う）。
+/// 基準ズームの地物と区別できるように `gsi_zoom` タグを付ける。
+fn overview_features(src: &TileSource, grid: Grid, lz: u8, tiles: &[TileCoord]) -> Result<Vec<(Tags, Feature)>> {
+    let mut low_grid: Option<Grid> = None;
+    let mut out = TileOut::default();
+    let mut line_pieces: BTreeMap<Tags, Vec<Vec<P>>> = BTreeMap::new();
+    for t in tile::covering(tiles, lz) {
+        let Some(data) = src.get(t)? else { continue };
+        let Some((extent, o)) = process_tile(t, &data).with_context(|| format!("タイル {t}"))? else {
+            continue;
+        };
+        match low_grid {
+            None => low_grid = Some(Grid { z: lz, extent }),
+            Some(g) if g.extent != extent => bail!("z{lz} で extent が混在しています（{} と {extent}）", g.extent),
+            _ => {}
         }
-        Ok(())
-    })?;
-    Ok(points)
+        out.points.extend(o.points);
+        out.polygons.extend(o.polygons);
+        for (tags, line) in o.lines {
+            line_pieces.entry(tags).or_default().push(line);
+        }
+    }
+    let Some(low_grid) = low_grid else { return Ok(Vec::new()) };
+
+    let scale = f64::from(1u32 << (grid.z - lz)) * f64::from(grid.extent) / f64::from(low_grid.extent);
+    let to_base = |p: &P| [p[0] * scale, p[1] * scale];
+    let zoom_tag = ("gsi_zoom".to_string(), lz.to_string());
+    let tagged = |mut tags: Tags| {
+        tags.push(zoom_tag.clone());
+        tags
+    };
+    let mut features = Vec::new();
+    for (tags, p) in out.points {
+        features.push((tagged(tags), Feature::Point(to_base(&p))));
+    }
+    for (tags, lines) in line_pieces {
+        let tags = tagged(tags);
+        for line in geom::merge_lines(lines, |p| low_grid.on_tile_edge(p), MERGE_TOLERANCE_PX) {
+            features.push((tags.clone(), Feature::Line(line.iter().map(to_base).collect())));
+        }
+    }
+    for (tags, rings) in out.polygons {
+        let rings = rings.iter().map(|r| r.iter().map(to_base).collect()).collect();
+        features.push((tagged(tags), Feature::Polygon(rings)));
+    }
+    Ok(features)
 }
 
 /// タイルをデコードし、タイル範囲で切り取る。地物のないタイルは `None`。

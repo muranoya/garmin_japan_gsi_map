@@ -65,8 +65,8 @@ async fn main() -> Result<()> {
                 })
             };
             fetch::run(fetch::FetchOptions {
-                // 縮小表示用の注記（主な山名など）を取るため、低ズームのタイルも取得する
-                targets: targets(if z > build::OVERVIEW_ZOOM { vec![build::OVERVIEW_ZOOM, z] } else { vec![z] })?,
+                // 縮小表示用のデータ（主な山名・100m 間隔の等高線など）を取るため、低ズームのタイルも取得する
+                targets: targets(build::OVERVIEW_ZOOMS.into_iter().filter(|lz| *lz < z).chain([z]).collect())?,
                 output: config.files.tiles.clone(),
                 url_template,
                 concurrency: config.fetch.concurrency.into(),
