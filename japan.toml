@@ -1,22 +1,59 @@
-# 日本全体の地図を作る設定（`just config=japan.toml fetch` / `just config=japan.toml img`）
-#
-# 項目の説明は gsi2garmin.toml を参照。z16 は約 216 万タイル（17GB）あり、取得には丸一日以上かかる。
-# 中断しても再実行すれば続きから取得する。
+# `gsi2garmin fetch` / `gsi2garmin build`（普段は `just fetch` / `just img`）はこのファイルの設定で動く。
+# 別の設定ファイルを使うときは `gsi2garmin --config <ファイル>`（`just config=<ファイル> img`）で指定する。
+# 相対パスはこのファイルのあるフォルダが基準。コメントアウトしている項目は省略時の値の例。
 
-zoom = 16
+# 取得・変換に使うズームレベル（最大 16。z14〜z16 のいずれも 25000 レベルのデータを含む）
+# fetch は縮小表示に使う低ズーム（z8・z10・z12・z13 のうち zoom より低いもの）のタイルも取得する
+zoom = 14
 
 [files]
+# 取得したベクタタイル（MBTiles）。{z}/{x}/{y}.pbf 形式のフォルダも指定できる（build のみ）
 tiles = "data/tiles/japan.mbtiles"
+# 取得した標高タイル（MBTiles）。陰影起伏を入れるときだけ使う
 dem = "data/tiles/japan-dem.mbtiles"
+# 中間ファイル（OSM・HGT など）の置き場所。build の開始時に作り直す。
+# 範囲が広いと数 GB〜十数 GB になる。省略すると一時フォルダを使い、終了時に削除する
 work_dir = "data/work/japan"
+# 出力する .img（端末の Garmin フォルダに置く）
 output = "data/output/japan.img"
 
 [fetch]
+# 同時リクエスト数（1〜16）。地理院サーバへの負荷を考えて小さめに
 concurrency = 4
-# 地理院のタイル一覧に載っているタイルをすべて取得する（bbox は不要）
+# ベクタタイルの URL テンプレート
+# url = "https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/{z}/{x}/{y}.pbf"
+# 取得するタイルの決め方。
+#   "bbox" = bbox の範囲内のタイル
+#   "all"  = 地理院のタイル一覧（mokuroku.csv.gz）に載っているすべてのタイル（日本全体）。bbox は無視する。
+#            一覧は files.tiles と同じフォルダに保存し、次回からはそれを使う（最新にするには削除する）。
+#            bbox で囲むと海のタイル（404）が大半になるので、全国を取るときはこちらを使う
 area = "all"
 
 [map]
+# 端末の地図一覧に表示する名前
 name = "地理院地図Vector"
+# 地図の説明（省略時は出力ファイル名）
+# description = "okutama"
+# 文字コード。65001 = UTF-8。日本語が表示されない場合は 932（Shift_JIS）を試す
 code_page = 65001
+# Garmin のファミリー ID。端末に入れる他の地図と重ならない値にする
 family_id = 7251
+
+[hillshade]
+# 陰影起伏（山肌の影）を入れるか。true にすると fetch で標高タイルも取得する。
+# 端末での描画が重くなり、縮小時に山地が灰色っぽく見えるので既定では入れない
+enabled = false
+# 標高タイルの種類。dem10b = DEM10B（全国）/ dem5a = DEM5A（航空レーザ測量の範囲のみ）
+source = "dem10b"
+# 標高タイルの URL テンプレート（省略時は source に応じた地理院の URL）
+# url = "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png"
+
+[build]
+# 地図を分割するときの 1 区画あたりのノード数の上限。
+# mkgmap が「RGN section ... is too big」で失敗する場合は小さくする
+max_nodes = 2000000
+# 見た目の試行錯誤用。指定するとビルドし直さずに編集中のスタイル・TYP を使える（省略時は同梱のもの）
+# style = "style/gsi"
+# typ = "style/gsi.typ.txt"
+# mkgmap.jar のパス（省略時は自動でダウンロードして ~/.cache/gsi2garmin/ にキャッシュする）
+# mkgmap = "/path/to/mkgmap.jar"

@@ -1,11 +1,11 @@
 # 地理院地図Vector → Garmin 地図（.img）の作成タスク
 #
-# 範囲・出力先・陰影起伏の有無などの設定は gsi2garmin.toml に書く。
+# 範囲・出力先・陰影起伏の有無などの設定は japan.toml に書く。
 # 別の設定ファイルを使う例:
 #   just config=tanzawa.toml all
 
 # 設定ファイル
-config := "gsi2garmin.toml"
+config := "japan.toml"
 
 bin := "target/release/gsi2garmin"
 
