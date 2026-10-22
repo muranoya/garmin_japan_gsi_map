@@ -8,11 +8,14 @@ use crate::osm::{self, Feature, Item, Tags};
 use crate::source::TileSource;
 use crate::split;
 use crate::tile::TileCoord;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::BufWriter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 /// タイル境界で線を結合するときの端点の許容距離（ピクセル）。z16 で 8px ≒ 1m。
@@ -21,6 +24,11 @@ const MERGE_TOLERANCE_PX: f64 = 8.0;
 /// 縮小表示用の注記を取るズーム。地理院は小縮尺の地図向けに主な山名などを選んで低ズームのタイルに
 /// 収録しているので、このズームのタイルの点を `gsi_zoom` タグ付きで加え、どれを使うかはスタイルで決める。
 pub const OVERVIEW_ZOOM: u8 = 10;
+
+/// 領域（まとめて処理するタイルの集まり）のデータ量の上限を、区画のノード数の上限から決めるための係数。
+/// 圧縮されたままのタイル 1 バイトがおよそ 0.17 ノードになる（奥多摩〜東京で計測）ので、
+/// 領域 1 つが区画 1 つ分程度になるようにする。
+const BYTES_PER_NODE: u64 = 6;
 
 pub struct BuildOptions {
     pub input: PathBuf,
@@ -61,29 +69,57 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     };
 
     let started = Instant::now();
-    let collected = collect(&opts)?;
-    eprintln!("タイルの読み込み・切り取り・結合: {:.1?}", started.elapsed());
+    let src = TileSource::open(&opts.input)?;
+    let zooms = src.zooms()?;
+    let z = match opts.zoom {
+        Some(z) if zooms.contains(&z) => z,
+        Some(z) => bail!("入力にズーム {z} のタイルがありません（収録: {zooms:?}）"),
+        None => *zooms.last().context("入力にタイルがありません")?,
+    };
+    let tiles = src.tile_sizes(z)?;
+    let grid = Grid { z, extent: first_extent(&src, &tiles)?.context("入力に地物がありません")? };
+    let area = tiles_bounds(grid, tiles.iter().map(|(t, _)| t));
+    let (west, north) = grid.to_lonlat(area.min);
+    let (east, south) = grid.to_lonlat(area.max);
+    let overview = if z > OVERVIEW_ZOOM && zooms.contains(&OVERVIEW_ZOOM) {
+        let points = overview_points(&src, grid, &area)?;
+        eprintln!("z{OVERVIEW_ZOOM}: 縮小表示用の点 {} 件", points.len());
+        points
+    } else {
+        Vec::new()
+    };
+    drop(src);
 
-    // 地図を mkgmap のタイル（区画）に分けて、区画ごとに OSM XML を書き出す
-    let started = Instant::now();
-    let parts = split::plan(&collected.items, collected.area, opts.max_nodes);
+    // 全地物をメモリに載せずに済むよう、タイルを領域に分けて領域ごとに処理する
+    let tile_count = tiles.len();
+    let regions = split::plan_regions(tiles, opts.max_nodes as u64 * BYTES_PER_NODE);
+    eprintln!("z{z}: {tile_count} タイルを {} 領域に分けて処理します", regions.len());
     let osm_dir = work.join("osm");
     std::fs::create_dir_all(&osm_dir)?;
-    // mkgmap は 8 桁の数字のファイル名をそのタイルの mapname として使う
-    let osm_paths: Vec<PathBuf> = parts
+    let next_id = AtomicUsize::new(0);
+    let pb = ProgressBar::new(regions.len() as u64);
+    pb.set_style(ProgressStyle::with_template("{bar:40} {pos}/{len} 領域 (残り {eta})")?);
+    let outs: Vec<RegionOut> = regions
         .par_iter()
-        .enumerate()
-        .map(|(i, area)| -> Result<PathBuf> {
-            let path = osm_dir.join(format!("{}{:04}.osm", opts.map.family_id, i + 1));
-            let items = split::clip_items(&collected.items, area);
-            let mut w = BufWriter::new(std::fs::File::create(&path)?);
-            osm::write(&mut w, &collected.grid, Some(area), &collected.tag_table, &items)?;
-            Ok(path)
+        .map(|tiles| {
+            let out = process_region(&opts, grid, tiles, &overview, &osm_dir, &next_id);
+            pb.inc(1);
+            out
         })
         .collect::<Result<_>>()?;
+    pb.finish_and_clear();
+    let mut osm_paths: Vec<PathBuf> = outs.iter().flat_map(|o| o.paths.iter().cloned()).collect();
+    osm_paths.sort();
+    let sum = |f: fn(&RegionOut) -> usize| outs.iter().map(f).sum::<usize>();
+    eprintln!(
+        "線 {} 断片 → {} 本に結合 / 地物 {} 件",
+        sum(|o| o.pieces),
+        sum(|o| o.lines),
+        sum(|o| o.features)
+    );
     let size: u64 = osm_paths.iter().map(|p| std::fs::metadata(p).map_or(0, |m| m.len())).sum();
     eprintln!(
-        "OSM XML 書き出し: {} 区画 {:.1?}（{:.1} MB）",
+        "タイルの読み込み・結合・OSM XML 書き出し: {} 区画 {:.1?}（{:.1} MB）",
         osm_paths.len(),
         started.elapsed(),
         size as f64 / 1e6
@@ -111,7 +147,7 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
         let started = Instant::now();
         let dem = Dem::load(&TileSource::open(dem_path)?)?;
         let hgt_dir = work.join("hgt");
-        let n = dem::write_hgt(&dem, collected.bounds, &hgt_dir)?;
+        let n = dem::write_hgt(&dem, [west, south, east, north], &hgt_dir)?;
         eprintln!("DEM → HGT {n} ファイル: {:.1?}", started.elapsed());
         let dists = mkgmap::dem_dists(&style_dir)?;
         extra.push(format!("--dem={}", hgt_dir.display()));
@@ -136,16 +172,6 @@ pub async fn run(opts: BuildOptions) -> Result<()> {
     Ok(())
 }
 
-struct Collected {
-    grid: Grid,
-    /// 入力タイル範囲の経緯度 [min_lon, min_lat, max_lon, max_lat]
-    bounds: [f64; 4],
-    /// 入力タイル範囲（全世界ピクセル座標）
-    area: Bounds,
-    tag_table: Vec<Tags>,
-    items: Vec<Item>,
-}
-
 /// 1 タイル分の処理結果（座標は全世界ピクセル座標）。
 #[derive(Default)]
 struct TileOut {
@@ -154,16 +180,53 @@ struct TileOut {
     polygons: Vec<(Tags, Vec<Vec<P>>)>,
 }
 
-fn collect(opts: &BuildOptions) -> Result<Collected> {
-    let src = TileSource::open(&opts.input)?;
-    let zooms = src.zooms()?;
-    let z = match opts.zoom {
-        Some(z) if zooms.contains(&z) => z,
-        Some(z) => bail!("入力にズーム {z} のタイルがありません（収録: {zooms:?}）"),
-        None => *zooms.last().context("入力にタイルがありません")?,
-    };
+/// 1 領域分の処理結果。
+struct RegionOut {
+    /// 書き出した OSM XML
+    paths: Vec<PathBuf>,
+    /// 結合前の線の断片の数
+    pieces: usize,
+    /// 結合後の線の数
+    lines: usize,
+    /// 地物の数
+    features: usize,
+}
 
-    let mut extent: Option<u32> = None;
+/// 最初に見つかった地物のあるタイルの extent。
+fn first_extent(src: &TileSource, tiles: &[(TileCoord, u64)]) -> Result<Option<u32>> {
+    for (t, _) in tiles {
+        if let Some(data) = src.get(*t)? {
+            if let Some(layer) = mvt::decode(&data).with_context(|| format!("タイル {t}"))?.first() {
+                return Ok(Some(layer.extent));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// タイルをすべて包含する範囲（全世界ピクセル座標）。
+fn tiles_bounds<'a>(grid: Grid, tiles: impl Iterator<Item = &'a TileCoord>) -> Bounds {
+    let (mut tmin, mut tmax) = ((u32::MAX, u32::MAX), (0u32, 0u32));
+    for t in tiles {
+        tmin = (tmin.0.min(t.x), tmin.1.min(t.y));
+        tmax = (tmax.0.max(t.x), tmax.1.max(t.y));
+    }
+    Bounds { min: grid.tile_bounds(tmin.0, tmin.1).min, max: grid.tile_bounds(tmax.0, tmax.1).max }
+}
+
+/// 1 つの領域のタイルを読み込んで切り取り・結合し、区画に分けて OSM XML を書き出す。
+///
+/// 領域どうしを並列に処理するので、領域内は 1 スレッドで処理する（同時にメモリに載る領域の数を
+/// スレッド数までに抑えるため）。線は領域の境界で切れるが、区画の境界でも切るので結果は変わらない。
+fn process_region(
+    opts: &BuildOptions,
+    grid: Grid,
+    tiles: &[TileCoord],
+    overview: &[(Tags, P)],
+    osm_dir: &Path,
+    next_id: &AtomicUsize,
+) -> Result<RegionOut> {
+    let src = TileSource::open(&opts.input)?;
     let mut tag_index: HashMap<Tags, usize> = HashMap::new();
     let mut tag_table: Vec<Tags> = Vec::new();
     let mut intern = |tags: Tags| -> usize {
@@ -174,70 +237,54 @@ fn collect(opts: &BuildOptions) -> Result<Collected> {
     };
     let mut items: Vec<Item> = Vec::new();
     let mut line_pieces: HashMap<usize, Vec<Vec<P>>> = HashMap::new();
-    let mut tiles = 0usize;
-    let (mut tmin, mut tmax) = ((u32::MAX, u32::MAX), (0u32, 0u32));
-
-    src.for_each_batch(z, 256, |batch| {
-        let outs: Vec<(u32, TileOut)> = batch
-            .par_iter()
-            .map(|(t, data)| process_tile(*t, data).with_context(|| format!("タイル {t}")))
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        for (e, out) in outs {
-            match extent {
-                None => extent = Some(e),
-                Some(prev) if prev != e => bail!("extent が混在しています（{prev} と {e}）"),
-                _ => {}
-            }
-            for (tags, p) in out.points {
-                items.push(Item { tags: intern(tags), feature: Feature::Point(p) });
-            }
-            for (tags, line) in out.lines {
-                line_pieces.entry(intern(tags)).or_default().push(line);
-            }
-            for (tags, rings) in out.polygons {
-                items.push(Item { tags: intern(tags), feature: Feature::Polygon(rings) });
-            }
+    for &t in tiles {
+        let Some(data) = src.get(t)? else { continue };
+        let Some((e, out)) = process_tile(t, &data).with_context(|| format!("タイル {t}"))? else {
+            continue;
+        };
+        if e != grid.extent {
+            bail!("extent が混在しています（{} と {e}）", grid.extent);
         }
-        tiles += batch.len();
-        for (t, _) in &batch {
-            tmin = (tmin.0.min(t.x), tmin.1.min(t.y));
-            tmax = (tmax.0.max(t.x), tmax.1.max(t.y));
+        for (tags, p) in out.points {
+            items.push(Item { tags: intern(tags), feature: Feature::Point(p) });
         }
-        Ok(())
-    })?;
+        for (tags, line) in out.lines {
+            line_pieces.entry(intern(tags)).or_default().push(line);
+        }
+        for (tags, rings) in out.polygons {
+            items.push(Item { tags: intern(tags), feature: Feature::Polygon(rings) });
+        }
+    }
 
-    let grid = Grid { z, extent: extent.context("入力に地物がありません")? };
     let pieces: usize = line_pieces.values().map(Vec::len).sum();
     let mut classes: Vec<(usize, Vec<Vec<P>>)> = line_pieces.into_iter().collect();
     classes.sort_by_key(|(t, _)| *t);
-    let merged: Vec<(usize, Vec<Vec<P>>)> = classes
-        .into_par_iter()
-        .map(|(t, lines)| (t, geom::merge_lines(lines, |p| grid.on_tile_edge(p), MERGE_TOLERANCE_PX)))
-        .collect();
-    let merged_count: usize = merged.iter().map(|(_, l)| l.len()).sum();
-    for (t, lines) in merged {
-        items.extend(lines.into_iter().map(|l| Item { tags: t, feature: Feature::Line(l) }));
+    let before = items.len();
+    for (t, lines) in classes {
+        let merged = geom::merge_lines(lines, |p| grid.on_tile_edge(p), MERGE_TOLERANCE_PX);
+        items.extend(merged.into_iter().map(|l| Item { tags: t, feature: Feature::Line(l) }));
     }
+    let lines = items.len() - before;
 
-    eprintln!(
-        "z{z}: {tiles} タイル / 線 {pieces} 断片 → {merged_count} 本に結合 / 地物 {} 件",
-        items.len()
-    );
-    let area = Bounds { min: grid.tile_bounds(tmin.0, tmin.1).min, max: grid.tile_bounds(tmax.0, tmax.1).max };
-
-    if z > OVERVIEW_ZOOM && zooms.contains(&OVERVIEW_ZOOM) {
-        let points = overview_points(&src, grid, &area)?;
-        eprintln!("z{OVERVIEW_ZOOM}: 縮小表示用の点 {} 件", points.len());
-        for (tags, p) in points {
-            items.push(Item { tags: intern(tags), feature: Feature::Point(p) });
+    let area = tiles_bounds(grid, tiles.iter());
+    for (tags, p) in overview {
+        if area.contains_half_open(*p) {
+            items.push(Item { tags: intern(tags.clone()), feature: Feature::Point(*p) });
         }
     }
-    let (west, north) = grid.to_lonlat(area.min);
-    let (east, south) = grid.to_lonlat(area.max);
-    Ok(Collected { grid, bounds: [west, south, east, north], area, tag_table, items })
+
+    let mut paths = Vec::new();
+    for part in split::plan(&items, area, opts.max_nodes) {
+        // mkgmap は 8 桁の数字のファイル名をそのタイルの mapname として使う
+        let id = next_id.fetch_add(1, Ordering::Relaxed) + 1;
+        ensure!(id <= 9999, "区画が 9999 を超えました。build.max_nodes を大きくしてください");
+        let path = osm_dir.join(format!("{}{id:04}.osm", opts.map.family_id));
+        let part_items = split::clip_items(&items, &part);
+        let mut w = BufWriter::new(File::create(&path)?);
+        osm::write(&mut w, &grid, Some(&part), &tag_table, &part_items)?;
+        paths.push(path);
+    }
+    Ok(RegionOut { paths, pieces, lines, features: items.len() })
 }
 
 /// 縮小表示用のズームのタイルから点地物を読み、`grid` の座標に換算して `area` 内のものを返す。

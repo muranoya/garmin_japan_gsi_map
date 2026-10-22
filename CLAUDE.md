@@ -76,6 +76,10 @@
 - 分割（`src/split.rs`）: Garmin は 1 タイルの RGN が 16MB までなので、ノード数が `--max-nodes`（既定 200 万）以下に
   なるまで四分木で範囲を分け、区画ごとに `<bounds>` 付きの OSM を書き出す。mkgmap は区画を並列に処理する。
   目安: 奥多摩〜東京（約 2.4 万タイル）で 160 区画、最大の区画でも RGN は上限の約 20%
+- 全国規模でも全地物をメモリに載せないよう、先にタイルを四分木で「領域」に分け（`split::plan_regions`。
+  データ量は圧縮されたままのタイルのバイト数で見積もる）、領域ごとに読込・結合・区画への分割・書き出しを行う。
+  領域どうしを並列に処理し、領域内は 1 スレッドで処理する。線は領域の境界でも切れる（区画の境界と同じ扱い）。
+  目安: 関東周辺 8.3 万タイル（全国の約 1/10）で Rust 側最大 1.1GB
 - 処理の流れの主なモジュール: `fetch.rs`（取得）→ `source.rs`（読込）→ `mvt.rs`（デコード）→ `geom.rs` → `osm.rs`（OSM XML）→ `mkgmap.rs`。DEM は `dem.rs`
 - CLI（普段は justfile 経由で使う: `just fetch` / `just img` / `just all`、設定ファイルは `just config=<file> ...` で指定）:
   - `gsi2garmin [--config gsi2garmin.toml] fetch`（ベクタタイル。陰影起伏が有効なら標高タイルも）

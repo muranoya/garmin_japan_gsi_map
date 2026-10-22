@@ -3,10 +3,43 @@
 //! Garmin の地図は 1 タイルあたりの RGN セクションが 16MB までに制限されるため、
 //! 広い範囲は複数のタイルに分ける必要がある。区画内のノード数が上限以下になるまで
 //! 範囲を四分木で再帰的に分割し、地物は区画の範囲で切り取る。
+//!
+//! 全国のような広い範囲は全地物をメモリに載せられないので、まずタイル単位で「領域」に分け
+//! （`plan_regions`）、領域ごとに読み込み・結合・区画への分割・書き出しを行う。
 
 use crate::geom::{self, Bounds, P};
 use crate::osm::{Feature, Item};
-use rayon::prelude::*;
+use crate::tile::TileCoord;
+
+/// タイルを四分木で領域に分ける。各領域のデータ量（タイルの圧縮されたままのバイト数の合計）が
+/// `max_bytes` 以下になるまで分割する（1 タイルで超える場合はそのタイルだけの領域にする）。
+/// 領域はズーム 0 から辿った四分木の節点なので互いに重ならない。
+pub fn plan_regions(tiles: Vec<(TileCoord, u64)>, max_bytes: u64) -> Vec<Vec<TileCoord>> {
+    let mut out = Vec::new();
+    if let Some(z) = tiles.first().map(|(t, _)| t.z) {
+        plan_regions_rec(tiles, z, 0, max_bytes, &mut out);
+    }
+    out
+}
+
+fn plan_regions_rec(tiles: Vec<(TileCoord, u64)>, z: u8, level: u8, max_bytes: u64, out: &mut Vec<Vec<TileCoord>>) {
+    if tiles.is_empty() {
+        return;
+    }
+    if level >= z || tiles.iter().map(|(_, b)| b).sum::<u64>() <= max_bytes {
+        out.push(tiles.into_iter().map(|(t, _)| t).collect());
+        return;
+    }
+    let shift = z - level - 1;
+    let mut children: [Vec<(TileCoord, u64)>; 4] = Default::default();
+    for (t, b) in tiles {
+        let i = ((t.x >> shift) & 1) + 2 * ((t.y >> shift) & 1);
+        children[i as usize].push((t, b));
+    }
+    for c in children {
+        plan_regions_rec(c, z, level + 1, max_bytes, out);
+    }
+}
 
 /// 分割の深さの上限。z16 の全世界ピクセル座標で 1 区画が極端に小さくならないようにする。
 const MAX_DEPTH: u32 = 16;
@@ -39,7 +72,7 @@ fn inside(a: &Bounds, outer: &Bounds) -> bool {
 /// 区画の範囲を決める。各区画内のノード数が `max_nodes` 以下になるように分割する。
 /// 地物のない区画は返さない。
 pub fn plan(items: &[Item], area: Bounds, max_nodes: usize) -> Vec<Bounds> {
-    let boxes: Vec<Bounds> = items.par_iter().map(|it| bbox(&it.feature)).collect();
+    let boxes: Vec<Bounds> = items.iter().map(|it| bbox(&it.feature)).collect();
     let mut out = Vec::new();
     let all: Vec<usize> = (0..items.len()).collect();
     plan_rec(items, &boxes, all, area, max_nodes, 0, &mut out);
@@ -59,7 +92,7 @@ fn plan_rec(
         return;
     }
     let nodes: usize = idx
-        .par_iter()
+        .iter()
         .map(|&i| {
             if inside(&boxes[i], &area) {
                 coords(&items[i].feature).count()
@@ -120,6 +153,26 @@ mod tests {
     use super::*;
 
     const AREA: Bounds = Bounds { min: [0.0, 0.0], max: [100.0, 100.0] };
+
+    #[test]
+    fn データ量に応じてタイルを領域に分ける() {
+        let t = |x, y| TileCoord { z: 4, x, y };
+        // 左上の 1/4 に大きなタイルが集まっている
+        let tiles = vec![(t(0, 0), 5), (t(1, 0), 5), (t(1, 1), 5), (t(9, 9), 1), (t(15, 15), 1)];
+        let regions = plan_regions(tiles, 10);
+        assert_eq!(regions.iter().map(Vec::len).sum::<usize>(), 5, "すべてのタイルがどこかの領域に入る");
+        // 右下の 2 タイルは合計 2 なので 1 つの領域になる
+        assert!(regions.contains(&vec![t(9, 9), t(15, 15)]));
+        // 左上は合計 15 で上限を超えるので分ける
+        assert!(regions.iter().all(|r| !(r.contains(&t(0, 0)) && r.contains(&t(1, 1)) && r.contains(&t(1, 0)))));
+    }
+
+    #[test]
+    fn 一タイルで上限を超えるときはそのタイルだけの領域にする() {
+        let t = |x, y| TileCoord { z: 2, x, y };
+        let regions = plan_regions(vec![(t(0, 0), 100), (t(1, 0), 100)], 10);
+        assert_eq!(regions, vec![vec![t(0, 0)], vec![t(1, 0)]]);
+    }
 
     fn line(tags: usize, pts: &[P]) -> Item {
         Item { tags, feature: Feature::Line(pts.to_vec()) }

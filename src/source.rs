@@ -3,7 +3,7 @@
 use crate::tile::TileCoord;
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -36,6 +36,40 @@ impl TileSource {
         };
         zooms.sort_unstable();
         Ok(zooms)
+    }
+
+    /// 指定ズームのタイルの一覧と、それぞれのデータの大きさ（圧縮されたままのバイト数）。
+    pub fn tile_sizes(&self, z: u8) -> Result<Vec<(TileCoord, u64)>> {
+        match self {
+            Self::MbTiles(conn) => conn
+                .prepare("SELECT tile_column, tile_row, length(tile_data) FROM tiles WHERE zoom_level = ?1")?
+                .query_map([z], |r| Ok((TileCoord::from_tms(z, r.get(0)?, r.get(1)?), r.get::<_, i64>(2)? as u64)))?
+                .collect::<Result<_, _>>()
+                .map_err(Into::into),
+            Self::Dir(root) => list_dir_tiles(&root.join(z.to_string()), z)?
+                .into_iter()
+                .map(|(t, path)| Ok((t, std::fs::metadata(path)?.len())))
+                .collect(),
+        }
+    }
+
+    /// 1 タイルのデータ（gzip を展開済み）。タイルがなければ None。
+    pub fn get(&self, t: TileCoord) -> Result<Option<Vec<u8>>> {
+        let data: Option<Vec<u8>> = match self {
+            Self::MbTiles(conn) => conn
+                .prepare_cached(
+                    "SELECT tile_data FROM tiles WHERE zoom_level = ?1 AND tile_column = ?2 AND tile_row = ?3",
+                )?
+                .query_row((t.z, t.x, t.tms_row()), |r| r.get(0))
+                .optional()?,
+            Self::Dir(root) => ["pbf", "mvt"]
+                .iter()
+                .map(|ext| root.join(format!("{}/{}/{}.{ext}", t.z, t.x, t.y)))
+                .find(|p| p.is_file())
+                .map(std::fs::read)
+                .transpose()?,
+        };
+        data.map(decompress).transpose()
     }
 
     /// 指定ズームのタイルを `batch` 件ずつまとめて `f` に渡す。データは gzip を展開済み。
@@ -149,6 +183,10 @@ mod tests {
                 (TileCoord { z: 16, x: 11, y: 20 }, vec![11]),
             ]
         );
+        let t = TileCoord { z: 16, x: 11, y: 20 };
+        assert_eq!(src.tile_sizes(16)?, vec![(TileCoord { z: 16, x: 10, y: 20 }, 1), (t, 1)]);
+        assert_eq!(src.get(t)?, Some(vec![11]));
+        assert_eq!(src.get(TileCoord { y: 21, ..t })?, None);
         Ok(())
     }
 }
